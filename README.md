@@ -33,3 +33,8 @@ Digite mensagens normalmente.
 - Adicionar memória de conversas
 - Expor API com FastAPI
 - Adicionar testes de integração
+
+## Boas práticas de Git remoto aplicadas
+- CI no GitHub Actions para rodar testes em `push` e `pull_request`
+- Template de Pull Request em `.github/pull_request_template.md`
+- `CODEOWNERS` para ownership e revisão
