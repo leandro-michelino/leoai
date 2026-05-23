@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hmac
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
@@ -208,7 +208,7 @@ class WebIngestRequest(BaseModel):
     auth_header: str = Field(default="", description="Ex.: Bearer <token>")
 
 
-def require_api_key(x_api_key: str | None = Header(default=None, alias="X-API-Key")) -> None:
+def require_api_key(x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> None:
     settings = get_settings()
     if not settings.api_auth_enabled:
         return
@@ -305,4 +305,3 @@ def rag_sources() -> dict[str, list[dict[str, str]]]:
     settings = get_settings()
     kb = KnowledgeBase(settings.rag_store_path)
     return {"sources": kb.list_sources()}
-

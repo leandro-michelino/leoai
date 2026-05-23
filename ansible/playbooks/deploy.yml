@@ -78,11 +78,11 @@
         mode: "0644"
       notify: Restart LeoAI service
 
-    - name: Enable and start LeoAI service
+    - name: Restart LeoAI service with latest code
       ansible.builtin.systemd:
         name: "{{ leoai_service_name }}"
         enabled: true
-        state: started
+        state: restarted
         daemon_reload: true
 
   handlers:
