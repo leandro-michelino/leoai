@@ -1,0 +1,22 @@
+---
+- name: Bootstrap base packages
+  hosts: leoai
+  become: true
+  tasks:
+    - name: Install base OS dependencies
+      ansible.builtin.apt:
+        name:
+          - git
+          - python3
+          - python3-venv
+          - python3-pip
+        state: present
+        update_cache: true
+
+    - name: Ensure application directory exists
+      ansible.builtin.file:
+        path: "{{ leoai_app_dir }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"

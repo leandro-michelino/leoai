@@ -38,3 +38,23 @@ Digite mensagens normalmente.
 - CI no GitHub Actions para rodar testes em `push` e `pull_request`
 - Template de Pull Request em `.github/pull_request_template.md`
 - `CODEOWNERS` para ownership e revisão
+
+## Preparativos de infraestrutura (Terraform + Ansible)
+- Terraform em [`terraform/`](./terraform)
+- Ansible em [`ansible/`](./ansible)
+- Script de orquestração em [`scripts/bootstrap_infra.sh`](./scripts/bootstrap_infra.sh)
+
+### Fluxo rápido
+```bash
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+# editar terraform/terraform.tfvars com seus OCIDs e parametros
+
+cd terraform
+terraform init
+terraform apply
+
+cd ../ansible
+cp inventory/hosts.ini.example inventory/hosts.ini  # se Terraform nao gerar automaticamente
+ansible-playbook playbooks/bootstrap.yml
+ansible-playbook playbooks/deploy.yml
+```

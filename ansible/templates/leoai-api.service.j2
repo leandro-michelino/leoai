@@ -1,0 +1,15 @@
+[Unit]
+Description=LeoAI FastAPI service
+After=network.target
+
+[Service]
+Type=simple
+User={{ ansible_user }}
+WorkingDirectory={{ leoai_app_dir }}
+EnvironmentFile={{ leoai_app_dir }}/.env
+ExecStart={{ leoai_venv_dir }}/bin/uvicorn leoai.api:app --host {{ leoai_api_host }} --port {{ leoai_api_port }}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

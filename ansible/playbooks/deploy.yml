@@ -1,0 +1,63 @@
+---
+- name: Deploy LeoAI app
+  hosts: leoai
+  become: true
+  vars:
+    repo_dest: "{{ leoai_app_dir }}"
+  tasks:
+    - name: Checkout repository
+      ansible.builtin.git:
+        repo: "{{ leoai_repo_url }}"
+        dest: "{{ repo_dest }}"
+        version: "{{ leoai_repo_branch }}"
+      become_user: "{{ ansible_user }}"
+
+    - name: Install runtime and project dependencies
+      ansible.builtin.pip:
+        name:
+          - "pip>=24.0"
+          - "setuptools>=68.0"
+          - "wheel"
+          - "uvicorn>=0.30.0"
+        virtualenv: "{{ leoai_venv_dir }}"
+        virtualenv_command: "python3 -m venv"
+      become_user: "{{ ansible_user }}"
+
+    - name: Install project in editable mode
+      ansible.builtin.pip:
+        name: "{{ repo_dest }}"
+        editable: true
+        virtualenv: "{{ leoai_venv_dir }}"
+      become_user: "{{ ansible_user }}"
+
+    - name: Ensure .env exists with placeholder
+      ansible.builtin.copy:
+        dest: "{{ leoai_app_dir }}/.env"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0600"
+        force: false
+        content: |
+          OPENAI_API_KEY=replace_me
+          OPENAI_MODEL=gpt-4.1-mini
+
+    - name: Configure systemd unit for API service
+      ansible.builtin.template:
+        src: "../templates/leoai-api.service.j2"
+        dest: "/etc/systemd/system/{{ leoai_service_name }}.service"
+        mode: "0644"
+      notify: Restart LeoAI service
+
+    - name: Enable and start LeoAI service
+      ansible.builtin.systemd:
+        name: "{{ leoai_service_name }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+
+  handlers:
+    - name: Restart LeoAI service
+      ansible.builtin.systemd:
+        name: "{{ leoai_service_name }}"
+        state: restarted
+        daemon_reload: true
