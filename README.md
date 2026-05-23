@@ -1,6 +1,6 @@
 # leoai
 
-Projeto inicial do seu AI rodando 100% na OCI com Llama (OCI Generative AI).
+Projeto inicial do seu AI rodando 100% na OCI (OCI Generative AI).
 
 ## O que já vem pronto
 - CLI interativa em `src/leoai`
@@ -38,10 +38,12 @@ uvicorn leoai.api:app --host 0.0.0.0 --port 8000
 OCI_AUTH_MODE=instance_principal
 OCI_REGION=eu-madrid-1
 OCI_COMPARTMENT_ID=ocid1.compartment.oc1..xxxx
-OCI_GENAI_MODEL_ID=meta.llama-3.1-70b-instruct
-OCI_API_FORMAT=GENERIC
+OCI_GENAI_MODEL_ID=cohere.command-a
+OCI_API_FORMAT=COHERE
 OCI_COHERE_SAFETY_MODE=OFF
 ```
+
+Observacao: confirme no console da OCI se `cohere.command-a` esta disponivel na sua regiao.
 
 ## Payload exato (Cohere com menos guardrails)
 Use este formato quando quiser Cohere com `safety_mode=OFF`:
