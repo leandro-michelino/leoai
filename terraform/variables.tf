@@ -27,7 +27,7 @@ variable "subnet_id" {
 variable "use_private_subnet_with_nat_sgw" {
   description = "Quando true, cria subnet privada no VCN alvo com NAT Gateway + Service Gateway"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "private_subnet_cidr" {
