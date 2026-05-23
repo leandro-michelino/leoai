@@ -1,4 +1,6 @@
-from openai import OpenAI
+from __future__ import annotations
+
+import oci
 
 from .config import Settings
 
@@ -11,15 +13,76 @@ SYSTEM_PROMPT = (
 
 class LeoAIAssistant:
     def __init__(self, settings: Settings) -> None:
-        self.client = OpenAI(api_key=settings.api_key)
-        self.model = settings.model
+        self.settings = settings
+        self.client = self._build_client(settings)
+
+    def _build_client(self, settings: Settings) -> oci.generative_ai_inference.GenerativeAiInferenceClient:
+        if settings.auth_mode == "instance_principal":
+            signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
+            return oci.generative_ai_inference.GenerativeAiInferenceClient(
+                config={"region": settings.region},
+                signer=signer,
+                service_endpoint=settings.inference_endpoint,
+                timeout=(10, 120),
+            )
+
+        config = oci.config.from_file(profile_name=settings.oci_profile)
+        return oci.generative_ai_inference.GenerativeAiInferenceClient(
+            config=config,
+            service_endpoint=settings.inference_endpoint,
+            timeout=(10, 120),
+        )
 
     def ask(self, user_message: str) -> str:
-        response = self.client.responses.create(
-            model=self.model,
-            input=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message},
-            ],
+        models = oci.generative_ai_inference.models
+
+        chat_details = models.ChatDetails(
+            compartment_id=self.settings.compartment_id,
+            serving_mode=models.OnDemandServingMode(model_id=self.settings.model_id),
+            chat_request=models.GenericChatRequest(
+                api_format="GENERIC",
+                messages=[
+                    models.SystemMessage(
+                        role="SYSTEM",
+                        content=[models.TextContent(text=SYSTEM_PROMPT)],
+                    ),
+                    models.UserMessage(
+                        role="USER",
+                        content=[models.TextContent(text=user_message)],
+                    ),
+                ],
+                temperature=self.settings.temperature,
+                top_p=self.settings.top_p,
+                max_tokens=self.settings.max_tokens,
+                is_stream=False,
+            ),
         )
-        return response.output_text.strip()
+
+        response = self.client.chat(chat_details=chat_details)
+        return self._extract_text(response.data)
+
+    @staticmethod
+    def _extract_text(chat_result: object) -> str:
+        chat_response = getattr(chat_result, "chat_response", None)
+        if chat_response is None:
+            raise RuntimeError("Resposta OCI inválida: chat_response ausente")
+
+        choices = getattr(chat_response, "choices", None) or []
+        if not choices:
+            raise RuntimeError("Resposta OCI inválida: choices vazio")
+
+        message = getattr(choices[0], "message", None)
+        if message is None:
+            raise RuntimeError("Resposta OCI inválida: message ausente")
+
+        content = getattr(message, "content", None) or []
+        text_parts: list[str] = []
+        for part in content:
+            text = getattr(part, "text", None)
+            if text:
+                text_parts.append(str(text))
+
+        if not text_parts:
+            raise RuntimeError("Resposta OCI inválida: conteúdo textual vazio")
+
+        return "\n".join(text_parts).strip()

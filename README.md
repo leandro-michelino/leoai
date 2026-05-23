@@ -1,17 +1,19 @@
 # leoai
 
-Projeto inicial do seu novo AI com interface via terminal usando OpenAI.
+Projeto inicial do seu AI rodando 100% na OCI com Llama (OCI Generative AI).
 
 ## O que já vem pronto
-- Estrutura Python organizada em `src/leoai`
-- Configuração via `.env`
-- CLI interativa para conversar com o modelo
+- CLI interativa em `src/leoai`
+- API FastAPI (`/health` e `/chat`)
+- Configuração OCI via `.env`
+- Infra com Terraform + Ansible
 - Remote Git apontando para `leandro-michelino/leoai`
 
 ## Requisitos
 - Python 3.10+
+- Acesso OCI com permissão para OCI Generative AI
 
-## Setup rápido
+## Setup rápido local
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -19,25 +21,29 @@ pip install -e .
 cp .env.example .env
 ```
 
-Depois, edite o `.env` e adicione sua chave da OpenAI.
+Edite `.env` com `OCI_REGION`, `OCI_COMPARTMENT_ID` e `OCI_GENAI_MODEL_ID`.
 
-## Rodar
+## Rodar CLI
 ```bash
 leoai
 ```
 
-Digite mensagens normalmente.
-- `sair` ou `exit` para encerrar.
+## Rodar API
+```bash
+uvicorn leoai.api:app --host 0.0.0.0 --port 8000
+```
 
-## Próximos passos sugeridos
-- Adicionar memória de conversas
-- Expor API com FastAPI
-- Adicionar testes de integração
+## .env para 100% OCI (Instance Principal)
+```dotenv
+OCI_AUTH_MODE=instance_principal
+OCI_REGION=eu-madrid-1
+OCI_COMPARTMENT_ID=ocid1.compartment.oc1..xxxx
+OCI_GENAI_MODEL_ID=meta.llama-3.1-70b-instruct
+```
 
-## Boas práticas de Git remoto aplicadas
-- CI no GitHub Actions para rodar testes em `push` e `pull_request`
-- Template de Pull Request em `.github/pull_request_template.md`
-- `CODEOWNERS` para ownership e revisão
+## IAM mínimo (OCI)
+- Coloque a VM em um Dynamic Group.
+- Crie policy permitindo esse Dynamic Group usar o serviço Generative AI Inference no compartment alvo.
 
 ## Preparativos de infraestrutura (Terraform + Ansible)
 - Terraform em [`terraform/`](./terraform)
@@ -58,3 +64,8 @@ cp inventory/hosts.ini.example inventory/hosts.ini  # se Terraform nao gerar aut
 ansible-playbook playbooks/bootstrap.yml
 ansible-playbook playbooks/deploy.yml
 ```
+
+## Boas práticas de Git remoto aplicadas
+- CI no GitHub Actions para testes em `push` e `pull_request`
+- Template de Pull Request em `.github/pull_request_template.md`
+- `CODEOWNERS` para ownership e revisão

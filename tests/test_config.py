@@ -1,24 +1,41 @@
-import os
-
 from leoai.config import get_settings
 
 
-def test_get_settings_uses_env(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_MODEL", "gpt-4.1-mini")
+def test_get_settings_uses_oci_env(monkeypatch):
+    monkeypatch.setenv("OCI_COMPARTMENT_ID", "ocid1.compartment.oc1..test")
+    monkeypatch.setenv("OCI_GENAI_MODEL_ID", "meta.llama-3.1-70b-instruct")
+    monkeypatch.setenv("OCI_REGION", "eu-madrid-1")
+    monkeypatch.setenv("OCI_AUTH_MODE", "instance_principal")
 
     settings = get_settings()
 
-    assert settings.api_key == "test-key"
-    assert settings.model == "gpt-4.1-mini"
+    assert settings.compartment_id == "ocid1.compartment.oc1..test"
+    assert settings.model_id == "meta.llama-3.1-70b-instruct"
+    assert settings.region == "eu-madrid-1"
+    assert settings.inference_endpoint == "https://inference.generativeai.eu-madrid-1.oci.oraclecloud.com"
+    assert settings.auth_mode == "instance_principal"
 
 
-def test_get_settings_raises_without_key(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setenv("OPENAI_MODEL", "gpt-4.1-mini")
+def test_get_settings_raises_without_compartment(monkeypatch):
+    monkeypatch.delenv("OCI_COMPARTMENT_ID", raising=False)
+    monkeypatch.setenv("OCI_GENAI_MODEL_ID", "meta.llama-3.1-70b-instruct")
+    monkeypatch.setenv("OCI_REGION", "eu-madrid-1")
 
     try:
         get_settings()
         assert False, "Era esperado ValueError"
     except ValueError as exc:
-        assert "OPENAI_API_KEY" in str(exc)
+        assert "OCI_COMPARTMENT_ID" in str(exc)
+
+
+def test_get_settings_rejects_invalid_auth_mode(monkeypatch):
+    monkeypatch.setenv("OCI_COMPARTMENT_ID", "ocid1.compartment.oc1..test")
+    monkeypatch.setenv("OCI_GENAI_MODEL_ID", "meta.llama-3.1-70b-instruct")
+    monkeypatch.setenv("OCI_REGION", "eu-madrid-1")
+    monkeypatch.setenv("OCI_AUTH_MODE", "foo")
+
+    try:
+        get_settings()
+        assert False, "Era esperado ValueError"
+    except ValueError as exc:
+        assert "OCI_AUTH_MODE" in str(exc)

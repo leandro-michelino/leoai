@@ -9,16 +9,76 @@ load_dotenv()
 
 @dataclass(frozen=True)
 class Settings:
-    api_key: str
-    model: str = "gpt-4.1-mini"
+    compartment_id: str
+    model_id: str
+    region: str
+    inference_endpoint: str
+    auth_mode: str = "instance_principal"
+    oci_profile: str = "DEFAULT"
+    temperature: float = 0.2
+    top_p: float = 0.75
+    max_tokens: int = 600
 
+
+def _env_required(name: str) -> str:
+    value = os.getenv(name, "").strip()
+    if not value:
+        raise ValueError(f"{name} não encontrada. Configure no arquivo .env.")
+    return value
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError as exc:  # noqa: B904
+        raise ValueError(f"{name} inválida. Use um número.") from exc
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:  # noqa: B904
+        raise ValueError(f"{name} inválida. Use um inteiro.") from exc
+
+
+def _default_inference_endpoint(region: str) -> str:
+    return f"https://inference.generativeai.{region}.oci.oraclecloud.com"
 
 
 def get_settings() -> Settings:
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
+    compartment_id = _env_required("OCI_COMPARTMENT_ID")
+    model_id = _env_required("OCI_GENAI_MODEL_ID")
+    region = _env_required("OCI_REGION")
 
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY não encontrada. Configure no arquivo .env.")
+    auth_mode = os.getenv("OCI_AUTH_MODE", "instance_principal").strip().lower() or "instance_principal"
+    if auth_mode not in {"instance_principal", "api_key"}:
+        raise ValueError("OCI_AUTH_MODE deve ser 'instance_principal' ou 'api_key'.")
 
-    return Settings(api_key=api_key, model=model)
+    oci_profile = os.getenv("OCI_CONFIG_PROFILE", "DEFAULT").strip() or "DEFAULT"
+
+    inference_endpoint = (
+        os.getenv("OCI_GENAI_INFERENCE_ENDPOINT", "").strip()
+        or _default_inference_endpoint(region)
+    )
+
+    temperature = _env_float("OCI_TEMPERATURE", 0.2)
+    top_p = _env_float("OCI_TOP_P", 0.75)
+    max_tokens = _env_int("OCI_MAX_TOKENS", 600)
+
+    return Settings(
+        compartment_id=compartment_id,
+        model_id=model_id,
+        region=region,
+        inference_endpoint=inference_endpoint,
+        auth_mode=auth_mode,
+        oci_profile=oci_profile,
+        temperature=temperature,
+        top_p=top_p,
+        max_tokens=max_tokens,
+    )

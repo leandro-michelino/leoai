@@ -38,8 +38,13 @@
         mode: "0600"
         force: false
         content: |
-          OPENAI_API_KEY=replace_me
-          OPENAI_MODEL=gpt-4.1-mini
+          OCI_AUTH_MODE={{ leoai_oci_auth_mode }}
+          OCI_REGION={{ leoai_oci_region }}
+          OCI_COMPARTMENT_ID={{ leoai_oci_compartment_id }}
+          OCI_GENAI_MODEL_ID={{ leoai_oci_genai_model_id }}
+          OCI_TEMPERATURE=0.2
+          OCI_TOP_P=0.75
+          OCI_MAX_TOKENS=600
 
     - name: Configure systemd unit for API service
       ansible.builtin.template:
