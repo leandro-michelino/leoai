@@ -6,8 +6,10 @@ leoai_service_name: "leoai-api"
 leoai_api_host: "0.0.0.0"
 leoai_api_port: 8000
 leoai_oci_auth_mode: "instance_principal"
-leoai_oci_region: "eu-madrid-1"
-leoai_oci_compartment_id: "ocid1.compartment.oc1..replace_me"
+leoai_oci_region: "uk-london-1"
+leoai_oci_compartment_id: "ocid1.compartment.oc1..aaaaaaaa3qjzj6affgfpcnioxmbz6vy2ksynl6h55k3zy5jk5qrnizoxbxya"
 leoai_oci_genai_model_id: "cohere.command-a"
 leoai_oci_api_format: "COHERE"
 leoai_oci_cohere_safety_mode: "OFF"
+leoai_web_search_enabled: "true"
+leoai_web_search_max_results: 5

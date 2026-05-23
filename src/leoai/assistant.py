@@ -3,6 +3,7 @@ from __future__ import annotations
 import oci
 
 from .config import Settings
+from .web_search import search_web_context
 
 
 SYSTEM_PROMPT = (
@@ -34,11 +35,31 @@ class LeoAIAssistant:
         )
 
     def ask(self, user_message: str) -> str:
+        return self.ask_with_options(user_message=user_message, use_web_search=False)
+
+    def ask_with_options(self, user_message: str, use_web_search: bool) -> str:
         models = oci.generative_ai_inference.models
+        final_message = user_message
+
+        if use_web_search and self.settings.web_search_enabled:
+            try:
+                web_context = search_web_context(
+                    query=user_message,
+                    max_results=self.settings.web_search_max_results,
+                )
+                final_message = (
+                    "Contexto web coletado automaticamente:\n"
+                    f"{web_context}\n\n"
+                    "Pergunta original do usuário:\n"
+                    f"{user_message}"
+                )
+            except Exception:
+                # Falha de pesquisa web nao deve bloquear a resposta do modelo.
+                final_message = user_message
 
         if self.settings.api_format == "COHERE":
             chat_request = models.CohereChatRequest(
-                message=user_message,
+                message=final_message,
                 temperature=self.settings.temperature,
                 top_p=self.settings.top_p,
                 max_tokens=self.settings.max_tokens,
@@ -55,7 +76,7 @@ class LeoAIAssistant:
                     ),
                     models.UserMessage(
                         role="USER",
-                        content=[models.TextContent(text=user_message)],
+                        content=[models.TextContent(text=final_message)],
                     ),
                 ],
                 temperature=self.settings.temperature,

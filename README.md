@@ -10,7 +10,7 @@ Projeto inicial do seu AI rodando 100% na OCI (OCI Generative AI).
 - Remote Git apontando para `leandro-michelino/leoai`
 
 ## Requisitos
-- Python 3.10+
+- Python 3.9+
 - Acesso OCI com permissão para OCI Generative AI
 
 ## Setup rápido local
@@ -33,6 +33,11 @@ leoai
 uvicorn leoai.api:app --host 0.0.0.0 --port 8000
 ```
 
+## GUI Web
+- URL local: `http://localhost:8000`
+- URL OCI: `http://<IP_PUBLICO_VM>:8000`
+- Health: `http://<IP_PUBLICO_VM>:8000/health`
+
 ## .env para 100% OCI (Instance Principal)
 ```dotenv
 OCI_AUTH_MODE=instance_principal
@@ -41,6 +46,8 @@ OCI_COMPARTMENT_ID=ocid1.compartment.oc1..xxxx
 OCI_GENAI_MODEL_ID=cohere.command-a
 OCI_API_FORMAT=COHERE
 OCI_COHERE_SAFETY_MODE=OFF
+WEB_SEARCH_ENABLED=true
+WEB_SEARCH_MAX_RESULTS=5
 ```
 
 Observacao: confirme no console da OCI se `cohere.command-a` esta disponivel na sua regiao.
@@ -77,6 +84,8 @@ chat_details = oci.generative_ai_inference.models.ChatDetails(
 ```bash
 cp terraform/terraform.tfvars.example terraform/terraform.tfvars
 # editar terraform/terraform.tfvars com seus OCIDs e parametros
+# definir tambem o profile OCI correto (ex.: oci_config_profile = "JNB")
+# definir laptop_ingress_cidr com seu IP publico (ex.: 203.0.113.10/32)
 
 cd terraform
 terraform init
@@ -87,6 +96,24 @@ cp inventory/hosts.ini.example inventory/hosts.ini  # se Terraform nao gerar aut
 ansible-playbook playbooks/bootstrap.yml
 ansible-playbook playbooks/deploy.yml
 ```
+
+### Pipeline com output avançado (Terraform + Ansible)
+```bash
+./scripts/bootstrap_infra.sh
+```
+
+Opcoes uteis:
+- `--plan-only` (apenas `terraform init/plan`)
+- `--tfvars terraform.tfvars`
+- `--inventory inventory/hosts.ini`
+- `--skip-terraform`
+- `--skip-ansible`
+
+O script gera logs detalhados por etapa em `TMPDIR` (ex.: `/tmp/leoai-deploy-YYYYMMDD-HHMMSS`), com resumo final de status e duracao.
+
+Observacao de rede:
+- Em subnet publica, a saida para internet usa Internet Gateway.
+- Para subnet privada, use NAT Gateway para saida geral e Service Gateway para acesso privado a servicos OCI (Object Storage, etc.).
 
 ## Boas práticas de Git remoto aplicadas
 - CI no GitHub Actions para testes em `push` e `pull_request`

@@ -2,6 +2,8 @@
 - name: Deploy LeoAI app
   hosts: leoai
   become: true
+  vars_files:
+    - ../group_vars/all.yml
   vars:
     repo_dest: "{{ leoai_app_dir }}"
   tasks:
@@ -44,6 +46,8 @@
           OCI_GENAI_MODEL_ID={{ leoai_oci_genai_model_id }}
           OCI_API_FORMAT={{ leoai_oci_api_format }}
           OCI_COHERE_SAFETY_MODE={{ leoai_oci_cohere_safety_mode }}
+          WEB_SEARCH_ENABLED={{ leoai_web_search_enabled }}
+          WEB_SEARCH_MAX_RESULTS={{ leoai_web_search_max_results }}
           OCI_TEMPERATURE=0.2
           OCI_TOP_P=0.75
           OCI_MAX_TOKENS=600

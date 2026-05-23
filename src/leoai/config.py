@@ -17,6 +17,8 @@ class Settings:
     oci_profile: str = "DEFAULT"
     api_format: str = "GENERIC"
     cohere_safety_mode: str = "OFF"
+    web_search_enabled: bool = False
+    web_search_max_results: int = 5
     temperature: float = 0.2
     top_p: float = 0.75
     max_tokens: int = 600
@@ -49,6 +51,17 @@ def _env_int(name: str, default: int) -> int:
         raise ValueError(f"{name} inválida. Use um inteiro.") from exc
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return default
+    if raw in {"1", "true", "yes", "y", "on"}:
+        return True
+    if raw in {"0", "false", "no", "n", "off"}:
+        return False
+    raise ValueError(f"{name} inválida. Use true/false.")
+
+
 def _default_inference_endpoint(region: str) -> str:
     return f"https://inference.generativeai.{region}.oci.oraclecloud.com"
 
@@ -71,6 +84,11 @@ def get_settings() -> Settings:
     if cohere_safety_mode not in {"OFF", "CONTEXTUAL", "STRICT"}:
         raise ValueError("OCI_COHERE_SAFETY_MODE deve ser 'OFF', 'CONTEXTUAL' ou 'STRICT'.")
 
+    web_search_enabled = _env_bool("WEB_SEARCH_ENABLED", False)
+    web_search_max_results = _env_int("WEB_SEARCH_MAX_RESULTS", 5)
+    if web_search_max_results < 1 or web_search_max_results > 10:
+        raise ValueError("WEB_SEARCH_MAX_RESULTS deve estar entre 1 e 10.")
+
     inference_endpoint = (
         os.getenv("OCI_GENAI_INFERENCE_ENDPOINT", "").strip()
         or _default_inference_endpoint(region)
@@ -89,6 +107,8 @@ def get_settings() -> Settings:
         oci_profile=oci_profile,
         api_format=api_format,
         cohere_safety_mode=cohere_safety_mode,
+        web_search_enabled=web_search_enabled,
+        web_search_max_results=web_search_max_results,
         temperature=temperature,
         top_p=top_p,
         max_tokens=max_tokens,

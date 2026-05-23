@@ -13,6 +13,8 @@ Provisiona a infraestrutura base para executar o LeoAI em uma VM OCI.
    cp terraform.tfvars.example terraform.tfvars
    ```
 2. Preencha os OCIDs e parametros reais.
+   - Defina `oci_config_profile` com o profile valido no seu `~/.oci/config` (ex.: `JNB`).
+   - Defina `laptop_ingress_cidr` com seu IP publico em formato CIDR `/32`.
 3. Execute:
    ```bash
    terraform init

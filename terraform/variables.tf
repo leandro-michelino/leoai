@@ -3,6 +3,12 @@ variable "oci_region" {
   type        = string
 }
 
+variable "oci_config_profile" {
+  description = "Profile no ~/.oci/config (ex.: DEFAULT, JNB)"
+  type        = string
+  default     = "DEFAULT"
+}
+
 variable "compartment_id" {
   description = "OCID do compartment"
   type        = string
@@ -64,10 +70,27 @@ variable "nsg_ids" {
   default     = []
 }
 
+variable "laptop_ingress_cidr" {
+  description = "CIDR do IP publico autorizado para ingress (ex.: 203.0.113.10/32)"
+  type        = string
+}
+
+variable "leoai_api_port" {
+  description = "Porta TCP da API LeoAI"
+  type        = number
+  default     = 8000
+}
+
 variable "ansible_ssh_user" {
   description = "Usuario SSH padrao da imagem (ex.: opc, ubuntu)"
   type        = string
   default     = "opc"
+}
+
+variable "ansible_ssh_private_key_file" {
+  description = "Caminho local da chave privada SSH para o Ansible"
+  type        = string
+  default     = ""
 }
 
 variable "generate_ansible_inventory" {
