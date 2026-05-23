@@ -50,6 +50,10 @@ WEB_SEARCH_ENABLED=true
 WEB_SEARCH_MAX_RESULTS=5
 ```
 
+Politica atual:
+- Nao habilitar `ApplyGuardrails`.
+- Para Cohere, manter `safety_mode="OFF"`.
+
 Observacao: confirme no console da OCI se `cohere.command-a` esta disponivel na sua regiao.
 
 ## Payload exato (Cohere com menos guardrails)

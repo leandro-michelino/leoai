@@ -81,8 +81,11 @@ def get_settings() -> Settings:
         raise ValueError("OCI_API_FORMAT deve ser 'GENERIC' ou 'COHERE'.")
 
     cohere_safety_mode = os.getenv("OCI_COHERE_SAFETY_MODE", "OFF").strip().upper() or "OFF"
-    if cohere_safety_mode not in {"OFF", "CONTEXTUAL", "STRICT"}:
-        raise ValueError("OCI_COHERE_SAFETY_MODE deve ser 'OFF', 'CONTEXTUAL' ou 'STRICT'.")
+    if cohere_safety_mode != "OFF":
+        raise ValueError(
+            "Politica deste projeto: OCI_COHERE_SAFETY_MODE deve permanecer 'OFF' "
+            "e ApplyGuardrails nao deve ser habilitado."
+        )
 
     web_search_enabled = _env_bool("WEB_SEARCH_ENABLED", False)
     web_search_max_results = _env_int("WEB_SEARCH_MAX_RESULTS", 5)
