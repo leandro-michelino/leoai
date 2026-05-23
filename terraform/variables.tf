@@ -24,6 +24,30 @@ variable "subnet_id" {
   type        = string
 }
 
+variable "use_private_subnet_with_nat_sgw" {
+  description = "Quando true, cria subnet privada no VCN alvo com NAT Gateway + Service Gateway"
+  type        = bool
+  default     = false
+}
+
+variable "private_subnet_cidr" {
+  description = "CIDR da subnet privada a ser criada quando use_private_subnet_with_nat_sgw=true"
+  type        = string
+  default     = "10.50.20.0/24"
+}
+
+variable "private_subnet_display_name" {
+  description = "Nome da subnet privada criada para o LeoAI"
+  type        = string
+  default     = "subnet-private-leoai"
+}
+
+variable "private_subnet_dns_label" {
+  description = "DNS label da subnet privada (1-15 chars alfanumericos)"
+  type        = string
+  default     = "leoaipvt"
+}
+
 variable "image_id" {
   description = "OCID da imagem da instancia"
   type        = string

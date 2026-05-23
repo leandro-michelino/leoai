@@ -17,8 +17,12 @@ class Settings:
     oci_profile: str = "DEFAULT"
     api_format: str = "GENERIC"
     cohere_safety_mode: str = "OFF"
+    api_auth_enabled: bool = True
+    api_auth_key: str = ""
     web_search_enabled: bool = False
     web_search_max_results: int = 5
+    rag_enabled: bool = True
+    rag_store_path: str = "/opt/leoai/data/knowledge_base.json"
     temperature: float = 0.2
     top_p: float = 0.75
     max_tokens: int = 600
@@ -92,6 +96,14 @@ def get_settings() -> Settings:
     if web_search_max_results < 1 or web_search_max_results > 10:
         raise ValueError("WEB_SEARCH_MAX_RESULTS deve estar entre 1 e 10.")
 
+    api_auth_enabled = _env_bool("LEOAI_API_AUTH_ENABLED", True)
+    api_auth_key = os.getenv("LEOAI_API_AUTH_KEY", "").strip()
+    if api_auth_enabled and len(api_auth_key) < 12:
+        raise ValueError("LEOAI_API_AUTH_KEY deve ter ao menos 12 caracteres quando auth estiver habilitado.")
+
+    rag_enabled = _env_bool("RAG_ENABLED", True)
+    rag_store_path = os.getenv("RAG_STORE_PATH", "/opt/leoai/data/knowledge_base.json").strip() or "/opt/leoai/data/knowledge_base.json"
+
     inference_endpoint = (
         os.getenv("OCI_GENAI_INFERENCE_ENDPOINT", "").strip()
         or _default_inference_endpoint(region)
@@ -110,8 +122,12 @@ def get_settings() -> Settings:
         oci_profile=oci_profile,
         api_format=api_format,
         cohere_safety_mode=cohere_safety_mode,
+        api_auth_enabled=api_auth_enabled,
+        api_auth_key=api_auth_key,
         web_search_enabled=web_search_enabled,
         web_search_max_results=web_search_max_results,
+        rag_enabled=rag_enabled,
+        rag_store_path=rag_store_path,
         temperature=temperature,
         top_p=top_p,
         max_tokens=max_tokens,

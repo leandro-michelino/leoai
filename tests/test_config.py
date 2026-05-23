@@ -8,6 +8,8 @@ def test_get_settings_uses_oci_env(monkeypatch):
     monkeypatch.setenv("OCI_AUTH_MODE", "instance_principal")
     monkeypatch.setenv("OCI_API_FORMAT", "COHERE")
     monkeypatch.setenv("OCI_COHERE_SAFETY_MODE", "OFF")
+    monkeypatch.setenv("LEOAI_API_AUTH_ENABLED", "true")
+    monkeypatch.setenv("LEOAI_API_AUTH_KEY", "test-auth-key-123")
 
     settings = get_settings()
 
@@ -24,6 +26,7 @@ def test_get_settings_raises_without_compartment(monkeypatch):
     monkeypatch.delenv("OCI_COMPARTMENT_ID", raising=False)
     monkeypatch.setenv("OCI_GENAI_MODEL_ID", "meta.llama-3.1-70b-instruct")
     monkeypatch.setenv("OCI_REGION", "eu-madrid-1")
+    monkeypatch.setenv("LEOAI_API_AUTH_ENABLED", "false")
 
     try:
         get_settings()
@@ -37,6 +40,7 @@ def test_get_settings_rejects_invalid_auth_mode(monkeypatch):
     monkeypatch.setenv("OCI_GENAI_MODEL_ID", "meta.llama-3.1-70b-instruct")
     monkeypatch.setenv("OCI_REGION", "eu-madrid-1")
     monkeypatch.setenv("OCI_AUTH_MODE", "foo")
+    monkeypatch.setenv("LEOAI_API_AUTH_ENABLED", "false")
 
     try:
         get_settings()
@@ -50,6 +54,7 @@ def test_get_settings_rejects_invalid_api_format(monkeypatch):
     monkeypatch.setenv("OCI_GENAI_MODEL_ID", "meta.llama-3.1-70b-instruct")
     monkeypatch.setenv("OCI_REGION", "eu-madrid-1")
     monkeypatch.setenv("OCI_API_FORMAT", "FOO")
+    monkeypatch.setenv("LEOAI_API_AUTH_ENABLED", "false")
 
     try:
         get_settings()

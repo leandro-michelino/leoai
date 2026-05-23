@@ -4,7 +4,7 @@ Projeto inicial do seu AI rodando 100% na OCI (OCI Generative AI).
 
 ## O que já vem pronto
 - CLI interativa em `src/leoai`
-- API FastAPI (`/health` e `/chat`)
+- API FastAPI com auth e RAG connectors (`/chat`, `/rag/*`)
 - Configuração OCI via `.env`
 - Infra com Terraform + Ansible
 - Remote Git apontando para `leandro-michelino/leoai`
@@ -46,13 +46,26 @@ OCI_COMPARTMENT_ID=ocid1.compartment.oc1..xxxx
 OCI_GENAI_MODEL_ID=cohere.command-a
 OCI_API_FORMAT=COHERE
 OCI_COHERE_SAFETY_MODE=OFF
+LEOAI_API_AUTH_ENABLED=true
+LEOAI_API_AUTH_KEY=troque_por_uma_chave_forte
 WEB_SEARCH_ENABLED=true
 WEB_SEARCH_MAX_RESULTS=5
+RAG_ENABLED=true
+RAG_STORE_PATH=/opt/leoai/data/knowledge_base.json
 ```
 
 Politica atual:
 - Nao habilitar `ApplyGuardrails`.
 - Para Cohere, manter `safety_mode="OFF"`.
+
+Auth da API/GUI:
+- Header obrigatório: `X-API-Key`
+- Endpoint para validar auth: `GET /auth/verify`
+
+RAG enterprise connectors:
+- `POST /rag/ingest/object-storage`
+- `POST /rag/ingest/web` com `source_type=confluence|sharepoint`
+- `GET /rag/sources`
 
 Observacao: confirme no console da OCI se `cohere.command-a` esta disponivel na sua regiao.
 
@@ -118,6 +131,7 @@ O script gera logs detalhados por etapa em `TMPDIR` (ex.: `/tmp/leoai-deploy-YYY
 Observacao de rede:
 - Em subnet publica, a saida para internet usa Internet Gateway.
 - Para subnet privada, use NAT Gateway para saida geral e Service Gateway para acesso privado a servicos OCI (Object Storage, etc.).
+- Para habilitar subnet privada no Terraform: `use_private_subnet_with_nat_sgw=true`.
 
 ## Boas práticas de Git remoto aplicadas
 - CI no GitHub Actions para testes em `push` e `pull_request`

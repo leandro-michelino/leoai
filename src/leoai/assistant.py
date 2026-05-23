@@ -35,11 +35,19 @@ class LeoAIAssistant:
         )
 
     def ask(self, user_message: str) -> str:
-        return self.ask_with_options(user_message=user_message, use_web_search=False)
+        return self.ask_with_options(user_message=user_message, use_web_search=False, extra_context="")
 
-    def ask_with_options(self, user_message: str, use_web_search: bool) -> str:
+    def ask_with_options(self, user_message: str, use_web_search: bool, extra_context: str) -> str:
         models = oci.generative_ai_inference.models
         final_message = user_message
+
+        if extra_context.strip():
+            final_message = (
+                "Contexto de conhecimento interno:\n"
+                f"{extra_context.strip()}\n\n"
+                "Pergunta original do usuário:\n"
+                f"{user_message}"
+            )
 
         if use_web_search and self.settings.web_search_enabled:
             try:
@@ -50,12 +58,11 @@ class LeoAIAssistant:
                 final_message = (
                     "Contexto web coletado automaticamente:\n"
                     f"{web_context}\n\n"
-                    "Pergunta original do usuário:\n"
-                    f"{user_message}"
+                    f"{final_message}"
                 )
             except Exception:
                 # Falha de pesquisa web nao deve bloquear a resposta do modelo.
-                final_message = user_message
+                final_message = final_message
 
         if self.settings.api_format == "COHERE":
             chat_request = models.CohereChatRequest(

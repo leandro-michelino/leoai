@@ -11,5 +11,9 @@ leoai_oci_compartment_id: "ocid1.compartment.oc1..aaaaaaaa3qjzj6affgfpcnioxmbz6v
 leoai_oci_genai_model_id: "cohere.command-a"
 leoai_oci_api_format: "COHERE"
 leoai_oci_cohere_safety_mode: "OFF"
+leoai_api_auth_enabled: "true"
+leoai_api_auth_key: "leoai-jnb-uk1-2026-secure-key"
 leoai_web_search_enabled: "true"
 leoai_web_search_max_results: 5
+leoai_rag_enabled: "true"
+leoai_rag_store_path: "/opt/leoai/data/knowledge_base.json"

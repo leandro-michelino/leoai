@@ -7,6 +7,13 @@
   vars:
     repo_dest: "{{ leoai_app_dir }}"
   tasks:
+    - name: Validate API auth key strength
+      ansible.builtin.assert:
+        that:
+          - leoai_api_auth_enabled | lower == "false" or (leoai_api_auth_key | length) >= 12
+          - leoai_api_auth_enabled | lower == "false" or leoai_api_auth_key != "change-me-very-strong-key"
+        fail_msg: "Defina uma chave forte em leoai_api_auth_key antes do deploy."
+
     - name: Checkout repository
       ansible.builtin.git:
         repo: "{{ leoai_repo_url }}"
@@ -38,7 +45,7 @@
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
         mode: "0600"
-        force: false
+        force: true
         content: |
           OCI_AUTH_MODE={{ leoai_oci_auth_mode }}
           OCI_REGION={{ leoai_oci_region }}
@@ -46,11 +53,23 @@
           OCI_GENAI_MODEL_ID={{ leoai_oci_genai_model_id }}
           OCI_API_FORMAT={{ leoai_oci_api_format }}
           OCI_COHERE_SAFETY_MODE={{ leoai_oci_cohere_safety_mode }}
+          LEOAI_API_AUTH_ENABLED={{ leoai_api_auth_enabled }}
+          LEOAI_API_AUTH_KEY={{ leoai_api_auth_key }}
           WEB_SEARCH_ENABLED={{ leoai_web_search_enabled }}
           WEB_SEARCH_MAX_RESULTS={{ leoai_web_search_max_results }}
+          RAG_ENABLED={{ leoai_rag_enabled }}
+          RAG_STORE_PATH={{ leoai_rag_store_path }}
           OCI_TEMPERATURE=0.2
           OCI_TOP_P=0.75
           OCI_MAX_TOKENS=600
+
+    - name: Ensure RAG data directory exists
+      ansible.builtin.file:
+        path: "{{ leoai_rag_store_path | dirname }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0750"
 
     - name: Configure systemd unit for API service
       ansible.builtin.template:
