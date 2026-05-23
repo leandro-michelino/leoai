@@ -42,6 +42,8 @@
           OCI_REGION={{ leoai_oci_region }}
           OCI_COMPARTMENT_ID={{ leoai_oci_compartment_id }}
           OCI_GENAI_MODEL_ID={{ leoai_oci_genai_model_id }}
+          OCI_API_FORMAT={{ leoai_oci_api_format }}
+          OCI_COHERE_SAFETY_MODE={{ leoai_oci_cohere_safety_mode }}
           OCI_TEMPERATURE=0.2
           OCI_TOP_P=0.75
           OCI_MAX_TOKENS=600

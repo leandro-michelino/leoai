@@ -39,6 +39,27 @@ OCI_AUTH_MODE=instance_principal
 OCI_REGION=eu-madrid-1
 OCI_COMPARTMENT_ID=ocid1.compartment.oc1..xxxx
 OCI_GENAI_MODEL_ID=meta.llama-3.1-70b-instruct
+OCI_API_FORMAT=GENERIC
+OCI_COHERE_SAFETY_MODE=OFF
+```
+
+## Payload exato (Cohere com menos guardrails)
+Use este formato quando quiser Cohere com `safety_mode=OFF`:
+```python
+chat_details = oci.generative_ai_inference.models.ChatDetails(
+    compartment_id=OCI_COMPARTMENT_ID,
+    serving_mode=oci.generative_ai_inference.models.OnDemandServingMode(
+        model_id="cohere.command-a"
+    ),
+    chat_request=oci.generative_ai_inference.models.CohereChatRequest(
+        message="Seu prompt aqui",
+        safety_mode="OFF",
+        temperature=0.2,
+        top_p=0.75,
+        max_tokens=600,
+        is_stream=False,
+    ),
+)
 ```
 
 ## IAM mínimo (OCI)

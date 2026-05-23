@@ -15,6 +15,8 @@ class Settings:
     inference_endpoint: str
     auth_mode: str = "instance_principal"
     oci_profile: str = "DEFAULT"
+    api_format: str = "GENERIC"
+    cohere_safety_mode: str = "OFF"
     temperature: float = 0.2
     top_p: float = 0.75
     max_tokens: int = 600
@@ -61,6 +63,13 @@ def get_settings() -> Settings:
         raise ValueError("OCI_AUTH_MODE deve ser 'instance_principal' ou 'api_key'.")
 
     oci_profile = os.getenv("OCI_CONFIG_PROFILE", "DEFAULT").strip() or "DEFAULT"
+    api_format = os.getenv("OCI_API_FORMAT", "GENERIC").strip().upper() or "GENERIC"
+    if api_format not in {"GENERIC", "COHERE"}:
+        raise ValueError("OCI_API_FORMAT deve ser 'GENERIC' ou 'COHERE'.")
+
+    cohere_safety_mode = os.getenv("OCI_COHERE_SAFETY_MODE", "OFF").strip().upper() or "OFF"
+    if cohere_safety_mode not in {"OFF", "CONTEXTUAL", "STRICT"}:
+        raise ValueError("OCI_COHERE_SAFETY_MODE deve ser 'OFF', 'CONTEXTUAL' ou 'STRICT'.")
 
     inference_endpoint = (
         os.getenv("OCI_GENAI_INFERENCE_ENDPOINT", "").strip()
@@ -78,6 +87,8 @@ def get_settings() -> Settings:
         inference_endpoint=inference_endpoint,
         auth_mode=auth_mode,
         oci_profile=oci_profile,
+        api_format=api_format,
+        cohere_safety_mode=cohere_safety_mode,
         temperature=temperature,
         top_p=top_p,
         max_tokens=max_tokens,

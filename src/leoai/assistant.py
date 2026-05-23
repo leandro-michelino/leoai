@@ -36,10 +36,17 @@ class LeoAIAssistant:
     def ask(self, user_message: str) -> str:
         models = oci.generative_ai_inference.models
 
-        chat_details = models.ChatDetails(
-            compartment_id=self.settings.compartment_id,
-            serving_mode=models.OnDemandServingMode(model_id=self.settings.model_id),
-            chat_request=models.GenericChatRequest(
+        if self.settings.api_format == "COHERE":
+            chat_request = models.CohereChatRequest(
+                message=user_message,
+                temperature=self.settings.temperature,
+                top_p=self.settings.top_p,
+                max_tokens=self.settings.max_tokens,
+                safety_mode=self.settings.cohere_safety_mode,
+                is_stream=False,
+            )
+        else:
+            chat_request = models.GenericChatRequest(
                 api_format="GENERIC",
                 messages=[
                     models.SystemMessage(
@@ -55,7 +62,12 @@ class LeoAIAssistant:
                 top_p=self.settings.top_p,
                 max_tokens=self.settings.max_tokens,
                 is_stream=False,
-            ),
+            )
+
+        chat_details = models.ChatDetails(
+            compartment_id=self.settings.compartment_id,
+            serving_mode=models.OnDemandServingMode(model_id=self.settings.model_id),
+            chat_request=chat_request,
         )
 
         response = self.client.chat(chat_details=chat_details)
@@ -66,6 +78,10 @@ class LeoAIAssistant:
         chat_response = getattr(chat_result, "chat_response", None)
         if chat_response is None:
             raise RuntimeError("Resposta OCI inválida: chat_response ausente")
+
+        cohere_text = getattr(chat_response, "text", None)
+        if isinstance(cohere_text, str) and cohere_text.strip():
+            return cohere_text.strip()
 
         choices = getattr(chat_response, "choices", None) or []
         if not choices:
