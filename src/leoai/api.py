@@ -151,7 +151,7 @@ GUI_HTML = """<!DOCTYPE html>
             <div>
               <textarea id="message" placeholder="Digite sua mensagem..." required></textarea>
               <div class="opts">
-                <label><input id="withWeb" type="checkbox" /> pesquisar web</label>
+                <span>pesquisa web: automática</span>
                 <label><input id="withRag" type="checkbox" checked /> usar RAG v2</label>
                 <label><input id="withStream" type="checkbox" checked /> streaming</label>
               </div>
@@ -221,7 +221,6 @@ GUI_HTML = """<!DOCTYPE html>
     const formEl = document.getElementById("chatForm");
     const msgEl = document.getElementById("message");
     const sendBtn = document.getElementById("sendBtn");
-    const withWebEl = document.getElementById("withWeb");
     const withRagEl = document.getElementById("withRag");
     const withStreamEl = document.getElementById("withStream");
     const statusEl = document.getElementById("status");
@@ -349,7 +348,7 @@ GUI_HTML = """<!DOCTYPE html>
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           message: text,
-          with_web: Boolean(withWebEl.checked),
+          with_web: true,
           with_rag: Boolean(withRagEl.checked),
         }),
       });
@@ -442,7 +441,7 @@ GUI_HTML = """<!DOCTYPE html>
             headers: { "Content-Type": "application/json", ...authHeaders() },
             body: JSON.stringify({
               message: text,
-              with_web: Boolean(withWebEl.checked),
+              with_web: true,
               with_rag: Boolean(withRagEl.checked),
             }),
           });
@@ -475,7 +474,7 @@ GUI_HTML = """<!DOCTYPE html>
           headers: { "Content-Type": "application/json", ...authHeaders() },
           body: JSON.stringify({
             message: lastPrompt,
-            with_web: Boolean(withWebEl.checked),
+            with_web: true,
             with_rag: Boolean(withRagEl.checked),
             filename,
             file_format: exportFormatEl.value,
@@ -551,7 +550,7 @@ GUI_HTML = """<!DOCTYPE html>
     });
 
     apiKeyEl.value = getApiKey();
-    addMessage("sys", "Use chat/files no painel. Auth automática é detectada ao carregar.");
+    addMessage("sys", "Use chat/files no painel. Pesquisa web está ativa automaticamente e auth é detectada ao carregar.");
     autoDetectAuthMode().catch(() => {});
     refreshFiles().catch(() => {});
   </script>
@@ -562,7 +561,7 @@ GUI_HTML = """<!DOCTYPE html>
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
-    with_web: bool = False
+    with_web: bool = True
     with_rag: bool = True
     rag_filters: Optional[dict[str, str]] = None
 
@@ -583,7 +582,7 @@ class WebIngestRequest(BaseModel):
 
 class ChatExportRequest(BaseModel):
     message: str = Field(min_length=1)
-    with_web: bool = False
+    with_web: bool = True
     with_rag: bool = True
     rag_filters: Optional[dict[str, str]] = None
     filename: str = Field(min_length=1)

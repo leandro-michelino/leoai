@@ -7,6 +7,7 @@ Starter para executar um assistente de IA na OCI com:
 - Ingestao de Object Storage e Web
 - Upload multi-arquivo (ate 10) com extracao por tipo e indexacao async
 - Chat com streaming SSE
+- Pesquisa web automática e transparente no chat da dashboard
 - Reverse proxy Nginx com TLS
 - Provisionamento com Terraform + Ansible
 
