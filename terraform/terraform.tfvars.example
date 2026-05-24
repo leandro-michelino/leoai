@@ -19,6 +19,9 @@ ansible_ssh_private_key_file = "~/.ssh/id_rsa"
 assign_public_ip     = true
 laptop_ingress_cidr  = "203.0.113.10/32"
 leoai_api_port       = 8000
+leoai_http_port      = 80
+leoai_https_port     = 443
+allow_direct_api_ingress = false
 
 freeform_tags = {
   project = "leoai"

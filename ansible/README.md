@@ -10,7 +10,10 @@ Automatiza bootstrap e deploy da aplicacao na VM criada pelo Terraform.
   - clona/atualiza repo
   - cria venv e instala projeto
   - escreve `.env` da app
-  - configura e reinicia servico systemd
+  - configura `systemd` do backend (`uvicorn` em loopback)
+  - configura `nginx` como reverse proxy publico
+  - configura TLS (`self_signed` ou `letsencrypt`)
+  - ajusta `firewalld` para 22/80/443
 
 ## Fluxo recomendado
 1. Provisione VM com Terraform.
@@ -19,6 +22,8 @@ Automatiza bootstrap e deploy da aplicacao na VM criada pelo Terraform.
 - `leoai_oci_region`
 - `leoai_oci_compartment_id`
 - `leoai_api_auth_key`
+- `leoai_tls_mode`
+- `leoai_tls_domain` e `leoai_tls_email` (se `letsencrypt`)
 4. Rode bootstrap:
 ```bash
 ansible-playbook -i inventory/hosts.ini playbooks/bootstrap.yml
@@ -27,6 +32,11 @@ ansible-playbook -i inventory/hosts.ini playbooks/bootstrap.yml
 ```bash
 ansible-playbook -i inventory/hosts.ini playbooks/deploy.yml
 ```
+
+## TLS modes
+- `self_signed`: gera certificado local para subir HTTPS imediatamente.
+- `letsencrypt`: emite certificado valido (exige dominio apontando para a VM).
+- `disabled`: somente HTTP no reverse proxy.
 
 ## Seguranca
 - `leoai_api_auth_key` default e placeholder e falha por design no deploy.

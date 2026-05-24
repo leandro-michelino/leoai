@@ -3,8 +3,9 @@
 Starter para executar um assistente de IA na OCI com:
 - CLI local
 - API FastAPI com auth
-- RAG simples em JSON
+- RAG v2 (embeddings + reranking híbrido)
 - Ingestao de Object Storage e Web
+- Reverse proxy Nginx com TLS
 - Provisionamento com Terraform + Ansible
 
 ## Arquitetura
@@ -58,7 +59,7 @@ OCI_GENAI_MODEL_ID=cohere.command-a
 OCI_API_FORMAT=COHERE
 OCI_COHERE_SAFETY_MODE=OFF
 
-LEOAI_API_AUTH_ENABLED=true
+LEOAI_API_AUTH_ENABLED=false
 LEOAI_API_AUTH_KEY=troque_por_uma_chave_forte
 
 WEB_SEARCH_ENABLED=true
@@ -66,6 +67,9 @@ WEB_SEARCH_MAX_RESULTS=5
 
 RAG_ENABLED=true
 RAG_STORE_PATH=/opt/leoai/data/knowledge_base.json
+RAG_EMBEDDINGS_ENABLED=true
+RAG_EMBEDDING_MODEL_ID=cohere.embed-multilingual-v3.0
+RAG_RERANK_ALPHA=0.65
 
 OCI_TEMPERATURE=0.2
 OCI_TOP_P=0.75
@@ -76,7 +80,9 @@ Validacoes importantes em runtime:
 - `OCI_AUTH_MODE`: `instance_principal` ou `api_key`
 - `OCI_API_FORMAT`: `GENERIC` ou `COHERE`
 - `OCI_COHERE_SAFETY_MODE`: fixo `OFF` (politica do projeto)
+- `LEOAI_API_AUTH_ENABLED=false`: modo automático da dashboard (sem key manual)
 - `WEB_SEARCH_MAX_RESULTS`: 1..10
+- `RAG_RERANK_ALPHA`: 0..1
 - `OCI_TEMPERATURE`: 0..2
 - `OCI_TOP_P`: >0 e <=1
 - `OCI_MAX_TOKENS`: 1..4096
@@ -115,7 +121,7 @@ ansible-playbook -i inventory/hosts.ini playbooks/deploy.yml
   - `terraform/.oci-config-temp`
   - `ansible/inventory/hosts.ini`
   - `*.tfstate`
-- O repositório contem apenas templates/samples, sem secrets reais.
+- O repositorio contem apenas templates/samples, sem secrets reais.
 
 ## Testes
 ```bash

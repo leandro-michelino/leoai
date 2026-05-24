@@ -96,7 +96,38 @@ resource "oci_core_network_security_group_security_rule" "leoai_ingress_ssh" {
   }
 }
 
-resource "oci_core_network_security_group_security_rule" "leoai_ingress_api" {
+resource "oci_core_network_security_group_security_rule" "leoai_ingress_http" {
+  network_security_group_id = oci_core_network_security_group.leoai.id
+  direction                 = "INGRESS"
+  protocol                  = "6"
+  source                    = var.laptop_ingress_cidr
+  source_type               = "CIDR_BLOCK"
+
+  tcp_options {
+    destination_port_range {
+      min = var.leoai_http_port
+      max = var.leoai_http_port
+    }
+  }
+}
+
+resource "oci_core_network_security_group_security_rule" "leoai_ingress_https" {
+  network_security_group_id = oci_core_network_security_group.leoai.id
+  direction                 = "INGRESS"
+  protocol                  = "6"
+  source                    = var.laptop_ingress_cidr
+  source_type               = "CIDR_BLOCK"
+
+  tcp_options {
+    destination_port_range {
+      min = var.leoai_https_port
+      max = var.leoai_https_port
+    }
+  }
+}
+
+resource "oci_core_network_security_group_security_rule" "leoai_ingress_api_direct" {
+  count                     = var.allow_direct_api_ingress ? 1 : 0
   network_security_group_id = oci_core_network_security_group.leoai.id
   direction                 = "INGRESS"
   protocol                  = "6"
@@ -150,6 +181,12 @@ resource "oci_core_instance" "leoai" {
 
   defined_tags  = var.defined_tags
   freeform_tags = var.freeform_tags
+
+  lifecycle {
+    ignore_changes = [
+      defined_tags,
+    ]
+  }
 }
 
 resource "local_file" "ansible_inventory" {

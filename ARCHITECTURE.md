@@ -11,53 +11,73 @@ Este documento descreve a arquitetura atual do projeto de forma operacional.
 | - chama LeoAIAssistant    |         | - /auth/verify                       |
 +-------------+-------------+         | - /rag/ingest/object-storage         |
               |                       | - /rag/ingest/web                    |
-              |                       | - /rag/sources                        |
+              |                       | - /rag/sources                       |
               v                       +-------------------+------------------+
       +-------+-------------------+                       |
       | LeoAIAssistant            |<----------------------+
       | - monta prompt/contexto   |
-      | - escolhe formato COHERE  |
-      |   ou GENERIC              |
+      | - formato COHERE/GENERIC  |
       +-------+-------------------+
               |
               v
       +-------+-----------------------------------------------+
       | OCI Generative AI Inference                           |
-      | endpoint: https://inference.generativeai.<region>... |
+      | - chat model                                          |
+      | - embed model (RAG v2)                                |
       +-------------------------------------------------------+
 ```
 
-## 2) Pipeline de contexto (RAG + Web)
+## 2) Exposicao publica (Nginx + TLS)
 
 ```text
-                     +---------------------------------------+
-User prompt -------->| /chat                                |
-                     +-------------------+-------------------+
-                                         |
-                 with_rag=true           | with_web=true
-                                         |
-               +------------------+      v
-               | KnowledgeBase    |  +----------------------+
-               | JSON local       |  | DuckDuckGo API       |
-               | retrieve_context |  | (web_search.py)      |
-               +---------+--------+  +----------+-----------+
-                         |                      |
-                         +----------+-----------+
-                                    v
-                           Prompt enriquecido
-                                    |
-                                    v
-                             LeoAIAssistant
+Internet
+   |
+   +--> 80  (redirect)
+   +--> 443 (TLS)
+           |
+           v
+      +----+------------------+
+      | Nginx reverse proxy   |
+      | - rate limit /chat    |
+      | - security headers    |
+      +----+------------------+
+           |
+           v
+      127.0.0.1:8000
+      (uvicorn / FastAPI)
 ```
 
-## 3) Ingestao de fontes
+## 3) Pipeline de contexto (RAG v2 + Web)
 
 ```text
-/rag/ingest/object-storage --> OCI Object Storage --> texto --> KnowledgeBase JSON
-/rag/ingest/web            --> URL http/https      --> texto --> KnowledgeBase JSON
+User prompt
+   |
+   v
+/chat
+   |
+   +--> with_web=true  --> DuckDuckGo API (web_search.py)
+   |
+   +--> with_rag=true
+           |
+           v
+     KnowledgeBase JSON
+           |
+           +--> lexical score (tokens)
+           +--> semantic score (cosine embedding)
+           +--> reranking hibrido (alpha)
+           |
+           v
+     Contexto final para o modelo
 ```
 
-## 4) Infraestrutura OCI (Terraform)
+## 4) Ingestao de fontes
+
+```text
+/rag/ingest/object-storage --> OCI Object Storage --> texto --> embedding --> KnowledgeBase JSON
+/rag/ingest/web            --> URL http/https      --> texto --> embedding --> KnowledgeBase JSON
+```
+
+## 5) Infraestrutura OCI (Terraform)
 
 ```text
                          +------------------------------+
@@ -74,17 +94,17 @@ User prompt -------->| /chat                                |
              +-----------+----------+                      +-----------+----------+
                          |                                             |
                       +--v-------------------+            +-----------v-----------+
-                      | NSG (SSH + API CIDR) |            | Route Table privada   |
+                      | NSG (22/80/443)      |            | Route Table privada   |
                       +--+-------------------+            | 0.0.0.0/0 -> NAT GW   |
                          |                                | OCI Services -> SGW    |
                          |                                +-----------+------------+
                  +-------v--------+                                   |
                  | OCI Instance   |                            +------v------+
-                 | (LeoAI API)    |                            | NAT + SGW    |
+                 | LeoAI + Nginx  |                            | NAT + SGW    |
                  +----------------+                            +-------------+
 ```
 
-## 5) Deploy (Ansible)
+## 6) Deploy (Ansible)
 
 ```text
 Terraform apply
@@ -101,5 +121,7 @@ ansible deploy.yml
    - pip install (venv)
    - gera /opt/leoai/.env
    - instala systemd leoai-api.service
-   - restart do servico
+   - instala/configura nginx
+   - configura TLS (self_signed ou letsencrypt)
+   - restart dos servicos
 ```

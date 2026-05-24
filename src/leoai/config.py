@@ -23,6 +23,13 @@ class Settings:
     web_search_max_results: int = 5
     rag_enabled: bool = True
     rag_store_path: str = "/opt/leoai/data/knowledge_base.json"
+    rag_embeddings_enabled: bool = True
+    rag_embedding_model_id: str = "cohere.embed-multilingual-v3.0"
+    rag_rerank_alpha: float = 0.65
+    files_store_dir: str = "/opt/leoai/data/files/uploads"
+    generated_store_dir: str = "/opt/leoai/data/files/generated"
+    files_index_path: str = "/opt/leoai/data/files/index.json"
+    max_upload_size_mb: int = 100
     temperature: float = 0.2
     top_p: float = 0.75
     max_tokens: int = 600
@@ -103,6 +110,21 @@ def get_settings() -> Settings:
 
     rag_enabled = _env_bool("RAG_ENABLED", True)
     rag_store_path = os.getenv("RAG_STORE_PATH", "/opt/leoai/data/knowledge_base.json").strip() or "/opt/leoai/data/knowledge_base.json"
+    rag_embeddings_enabled = _env_bool("RAG_EMBEDDINGS_ENABLED", True)
+    rag_embedding_model_id = (
+        os.getenv("RAG_EMBEDDING_MODEL_ID", "cohere.embed-multilingual-v3.0").strip()
+        or "cohere.embed-multilingual-v3.0"
+    )
+    rag_rerank_alpha = _env_float("RAG_RERANK_ALPHA", 0.65)
+    if rag_rerank_alpha < 0 or rag_rerank_alpha > 1:
+        raise ValueError("RAG_RERANK_ALPHA deve estar entre 0 e 1.")
+
+    files_store_dir = os.getenv("FILES_STORE_DIR", "/opt/leoai/data/files/uploads").strip() or "/opt/leoai/data/files/uploads"
+    generated_store_dir = os.getenv("GENERATED_STORE_DIR", "/opt/leoai/data/files/generated").strip() or "/opt/leoai/data/files/generated"
+    files_index_path = os.getenv("FILES_INDEX_PATH", "/opt/leoai/data/files/index.json").strip() or "/opt/leoai/data/files/index.json"
+    max_upload_size_mb = _env_int("MAX_UPLOAD_SIZE_MB", 100)
+    if max_upload_size_mb < 1 or max_upload_size_mb > 1024:
+        raise ValueError("MAX_UPLOAD_SIZE_MB deve estar entre 1 e 1024.")
 
     inference_endpoint = (
         os.getenv("OCI_GENAI_INFERENCE_ENDPOINT", "").strip()
@@ -136,6 +158,13 @@ def get_settings() -> Settings:
         web_search_max_results=web_search_max_results,
         rag_enabled=rag_enabled,
         rag_store_path=rag_store_path,
+        rag_embeddings_enabled=rag_embeddings_enabled,
+        rag_embedding_model_id=rag_embedding_model_id,
+        rag_rerank_alpha=rag_rerank_alpha,
+        files_store_dir=files_store_dir,
+        generated_store_dir=generated_store_dir,
+        files_index_path=files_index_path,
+        max_upload_size_mb=max_upload_size_mb,
         temperature=temperature,
         top_p=top_p,
         max_tokens=max_tokens,

@@ -22,6 +22,42 @@ def test_knowledge_base_supports_relative_filename(tmp_path):
         os.chdir(cwd)
 
 
+class _FakeEmbedder:
+    def embed_text(self, text: str, input_type: str = "SEARCH_DOCUMENT") -> list[float]:
+        lower = text.lower()
+        if "oracle" in lower:
+            return [1.0, 0.0]
+        if "faturamento" in lower:
+            return [0.0, 1.0]
+        return [0.5, 0.5]
+
+
+def test_knowledge_base_hybrid_reranking_prefers_semantic_match(tmp_path):
+    kb = KnowledgeBase(str(tmp_path / "kb.json"))
+    kb.add_document(
+        source_type="test",
+        source_ref="doc://oracle",
+        title="Oracle Doc",
+        content="informacoes sobre cloud e servicos",
+        embedding=[1.0, 0.0],
+    )
+    kb.add_document(
+        source_type="test",
+        source_ref="doc://finance",
+        title="Financeiro",
+        content="faturamento consolidado",
+        embedding=[0.0, 1.0],
+    )
+
+    context = kb.retrieve_context(
+        "oracle cloud",
+        top_k=1,
+        embedder=_FakeEmbedder(),
+        rerank_alpha=0.8,
+    )
+    assert "doc://oracle" in context
+
+
 @pytest.mark.parametrize(
     "url",
     [

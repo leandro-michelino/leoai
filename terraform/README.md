@@ -5,7 +5,9 @@ Provisiona infraestrutura para rodar o LeoAI em VM OCI.
 ## O que este modulo cria
 - 1 NSG com regras:
   - SSH (22) a partir de `laptop_ingress_cidr`
-  - API (`leoai_api_port`) a partir de `laptop_ingress_cidr`
+  - HTTP (`leoai_http_port`, default 80) a partir de `laptop_ingress_cidr`
+  - HTTPS (`leoai_https_port`, default 443) a partir de `laptop_ingress_cidr`
+  - Opcional: acesso direto ao backend (`leoai_api_port`) quando `allow_direct_api_ingress=true`
   - Egress liberado
 - 1 instancia OCI com chave SSH local
 - (Opcional) inventario Ansible em `../ansible/inventory/hosts.ini`
@@ -16,7 +18,6 @@ Provisiona infraestrutura para rodar o LeoAI em VM OCI.
 - `use_private_subnet_with_nat_sgw=false`
 - VM usa `subnet_id` informado
 - Pode receber IP publico (`assign_public_ip=true`)
-- `create_service_gateway` pode ser `true` ou `false`
 
 2. Privado recomendado
 - `use_private_subnet_with_nat_sgw=true`

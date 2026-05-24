@@ -111,9 +111,27 @@ variable "laptop_ingress_cidr" {
 }
 
 variable "leoai_api_port" {
-  description = "Porta TCP da API LeoAI"
+  description = "Porta TCP da API LeoAI no backend (uvicorn). Usada apenas quando allow_direct_api_ingress=true"
   type        = number
   default     = 8000
+}
+
+variable "leoai_http_port" {
+  description = "Porta TCP publica HTTP no reverse proxy"
+  type        = number
+  default     = 80
+}
+
+variable "leoai_https_port" {
+  description = "Porta TCP publica HTTPS no reverse proxy"
+  type        = number
+  default     = 443
+}
+
+variable "allow_direct_api_ingress" {
+  description = "Quando true, permite acesso direto ao backend uvicorn (leoai_api_port). Em producao deve ser false."
+  type        = bool
+  default     = false
 }
 
 variable "ansible_ssh_user" {
