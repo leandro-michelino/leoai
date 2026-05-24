@@ -71,6 +71,27 @@
         group: "{{ ansible_user }}"
         mode: "0750"
 
+    - name: Check firewalld status
+      ansible.builtin.command: systemctl is-active firewalld
+      register: firewalld_status
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure API port is open in firewalld when active
+      ansible.builtin.shell: |
+        if firewall-cmd --query-port={{ leoai_api_port }}/tcp >/dev/null 2>&1; then
+          echo "already-open"
+        else
+          firewall-cmd --permanent --add-port={{ leoai_api_port }}/tcp
+          firewall-cmd --reload
+          echo "opened"
+        fi
+      args:
+        executable: /bin/bash
+      register: firewalld_port_result
+      changed_when: "'opened' in firewalld_port_result.stdout"
+      when: firewalld_status.stdout == "active"
+
     - name: Configure systemd unit for API service
       ansible.builtin.template:
         src: "../templates/leoai-api.service.j2"
