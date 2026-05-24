@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 *.so
+*.egg-info/
 .Python
 .venv/
 venv/
@@ -12,4 +13,7 @@ venv/
 *.tfstate
 *.tfstate.*
 terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+terraform/*.auto.tfvars
+terraform/.oci-config-temp
 ansible/inventory/hosts.ini

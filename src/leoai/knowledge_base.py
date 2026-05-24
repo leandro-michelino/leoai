@@ -36,7 +36,9 @@ class KnowledgeBase:
         self._docs = [KnowledgeDoc(**item) for item in payload]
 
     def _save(self) -> None:
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        parent_dir = os.path.dirname(self.path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
         with open(self.path, "w", encoding="utf-8") as f:
             json.dump([asdict(doc) for doc in self._docs], f, ensure_ascii=False, indent=2)
 
@@ -95,4 +97,3 @@ class KnowledgeBase:
                 f"Trecho: {snippet}"
             )
         return "\n\n".join(parts)
-

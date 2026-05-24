@@ -1,44 +1,55 @@
 # leoai
 
-Projeto inicial do seu AI rodando 100% na OCI (OCI Generative AI).
+Starter para executar um assistente de IA na OCI com:
+- CLI local
+- API FastAPI com auth
+- RAG simples em JSON
+- Ingestao de Object Storage e Web
+- Provisionamento com Terraform + Ansible
 
-## O que já vem pronto
-- CLI interativa em `src/leoai`
-- API FastAPI com auth e RAG connectors (`/chat`, `/rag/*`)
-- Configuração OCI via `.env`
-- Infra com Terraform + Ansible
-- Remote Git apontando para `leandro-michelino/leoai`
+## Arquitetura
+- Documento completo em ASCII: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 
 ## Requisitos
 - Python 3.9+
-- Acesso OCI com permissão para OCI Generative AI
+- Terraform 1.6+
+- Ansible (para deploy remoto)
+- Acesso OCI com permissoes para:
+  - Compute
+  - Networking
+  - Generative AI Inference
+  - Object Storage (se usar ingestao)
 
-## Setup rápido local
+## Setup local rapido
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e '.[dev]'
 cp .env.example .env
 ```
 
-Edite `.env` com `OCI_REGION`, `OCI_COMPARTMENT_ID` e `OCI_GENAI_MODEL_ID`.
+Edite `.env` com pelo menos:
+- `OCI_REGION`
+- `OCI_COMPARTMENT_ID`
+- `OCI_GENAI_MODEL_ID`
+- `LEOAI_API_AUTH_KEY` (minimo 12 chars quando auth habilitada)
 
-## Rodar CLI
+## Executar
+CLI:
 ```bash
 leoai
 ```
 
-## Rodar API
+API:
 ```bash
 uvicorn leoai.api:app --host 0.0.0.0 --port 8000
 ```
 
-## GUI Web
-- URL local: `http://localhost:8000`
-- URL OCI: `http://<IP_PUBLICO_VM>:8000`
-- Health: `http://<IP_PUBLICO_VM>:8000/health`
+GUI local:
+- `http://localhost:8000`
+- Health: `http://localhost:8000/health`
 
-## .env para 100% OCI (Instance Principal)
+## Variaveis principais (.env)
 ```dotenv
 OCI_AUTH_MODE=instance_principal
 OCI_REGION=eu-madrid-1
@@ -46,94 +57,70 @@ OCI_COMPARTMENT_ID=ocid1.compartment.oc1..xxxx
 OCI_GENAI_MODEL_ID=cohere.command-a
 OCI_API_FORMAT=COHERE
 OCI_COHERE_SAFETY_MODE=OFF
+
 LEOAI_API_AUTH_ENABLED=true
 LEOAI_API_AUTH_KEY=troque_por_uma_chave_forte
+
 WEB_SEARCH_ENABLED=true
 WEB_SEARCH_MAX_RESULTS=5
+
 RAG_ENABLED=true
 RAG_STORE_PATH=/opt/leoai/data/knowledge_base.json
+
+OCI_TEMPERATURE=0.2
+OCI_TOP_P=0.75
+OCI_MAX_TOKENS=600
 ```
 
-Politica atual:
-- Nao habilitar `ApplyGuardrails`.
-- Para Cohere, manter `safety_mode="OFF"`.
+Validacoes importantes em runtime:
+- `OCI_AUTH_MODE`: `instance_principal` ou `api_key`
+- `OCI_API_FORMAT`: `GENERIC` ou `COHERE`
+- `OCI_COHERE_SAFETY_MODE`: fixo `OFF` (politica do projeto)
+- `WEB_SEARCH_MAX_RESULTS`: 1..10
+- `OCI_TEMPERATURE`: 0..2
+- `OCI_TOP_P`: >0 e <=1
+- `OCI_MAX_TOKENS`: 1..4096
 
-Auth da API/GUI:
-- Header obrigatório: `X-API-Key`
-- Endpoint para validar auth: `GET /auth/verify`
-
-RAG enterprise connectors:
+## Endpoints
+- `GET /health`
+- `GET /auth/verify` (exige `X-API-Key` quando auth habilitada)
+- `POST /chat`
 - `POST /rag/ingest/object-storage`
-- `POST /rag/ingest/web` com `source_type=confluence|sharepoint`
+- `POST /rag/ingest/web`
 - `GET /rag/sources`
 
-Observacao: confirme no console da OCI se `cohere.command-a` esta disponivel na sua regiao.
+## Infra e deploy
+- Terraform: [`terraform/README.md`](./terraform/README.md)
+- Ansible: [`ansible/README.md`](./ansible/README.md)
+- Pipeline local: [`scripts/bootstrap_infra.sh`](./scripts/bootstrap_infra.sh)
 
-## Payload exato (Cohere com menos guardrails)
-Use este formato quando quiser Cohere com `safety_mode=OFF`:
-```python
-chat_details = oci.generative_ai_inference.models.ChatDetails(
-    compartment_id=OCI_COMPARTMENT_ID,
-    serving_mode=oci.generative_ai_inference.models.OnDemandServingMode(
-        model_id="cohere.command-a"
-    ),
-    chat_request=oci.generative_ai_inference.models.CohereChatRequest(
-        message="Seu prompt aqui",
-        safety_mode="OFF",
-        temperature=0.2,
-        top_p=0.75,
-        max_tokens=600,
-        is_stream=False,
-    ),
-)
-```
-
-## IAM mínimo (OCI)
-- Coloque a VM em um Dynamic Group.
-- Crie policy permitindo esse Dynamic Group usar o serviço Generative AI Inference no compartment alvo.
-
-## Preparativos de infraestrutura (Terraform + Ansible)
-- Terraform em [`terraform/`](./terraform)
-- Ansible em [`ansible/`](./ansible)
-- Script de orquestração em [`scripts/bootstrap_infra.sh`](./scripts/bootstrap_infra.sh)
-
-### Fluxo rápido
+Fluxo curto:
 ```bash
 cp terraform/terraform.tfvars.example terraform/terraform.tfvars
-# editar terraform/terraform.tfvars com seus OCIDs e parametros
-# definir tambem o profile OCI correto (ex.: oci_config_profile = "JNB")
-# definir laptop_ingress_cidr com seu IP publico (ex.: 203.0.113.10/32)
+# editar valores reais
 
 cd terraform
 terraform init
 terraform apply
 
 cd ../ansible
-cp inventory/hosts.ini.example inventory/hosts.ini  # se Terraform nao gerar automaticamente
-ansible-playbook playbooks/bootstrap.yml
-ansible-playbook playbooks/deploy.yml
+# editar group_vars/all.yml com valores reais e chave forte
+ansible-playbook -i inventory/hosts.ini playbooks/bootstrap.yml
+ansible-playbook -i inventory/hosts.ini playbooks/deploy.yml
 ```
 
-### Pipeline com output avançado (Terraform + Ansible)
+## Higiene e seguranca
+- Nao commitar arquivos locais de credenciais/estado:
+  - `terraform/terraform.tfvars`
+  - `terraform/.oci-config-temp`
+  - `ansible/inventory/hosts.ini`
+  - `*.tfstate`
+- O repositório contem apenas templates/samples, sem secrets reais.
+
+## Testes
 ```bash
-./scripts/bootstrap_infra.sh
+.venv/bin/pytest -q
 ```
 
-Opcoes uteis:
-- `--plan-only` (apenas `terraform init/plan`)
-- `--tfvars terraform.tfvars`
-- `--inventory inventory/hosts.ini`
-- `--skip-terraform`
-- `--skip-ansible`
-
-O script gera logs detalhados por etapa em `TMPDIR` (ex.: `/tmp/leoai-deploy-YYYYMMDD-HHMMSS`), com resumo final de status e duracao.
-
-Observacao de rede:
-- Em subnet publica, a saida para internet usa Internet Gateway.
-- Para subnet privada, use NAT Gateway para saida geral e Service Gateway para acesso privado a servicos OCI (Object Storage, etc.).
-- Para habilitar subnet privada no Terraform: `use_private_subnet_with_nat_sgw=true`.
-
-## Boas práticas de Git remoto aplicadas
-- CI no GitHub Actions para testes em `push` e `pull_request`
-- Template de Pull Request em `.github/pull_request_template.md`
-- `CODEOWNERS` para ownership e revisão
+## CI
+Pipeline GitHub Actions roda testes Python em `push` e `pull_request`.

@@ -4,6 +4,7 @@ compartment_id       = "ocid1.compartment.oc1..example"
 availability_domain  = "kIdk:EU-MADRID-1-AD-1"
 subnet_id            = "ocid1.subnet.oc1.eu-madrid-1.example"
 use_private_subnet_with_nat_sgw = true
+create_service_gateway = true
 private_subnet_cidr = "10.50.20.0/24"
 private_subnet_display_name = "subnet-private-leoai"
 private_subnet_dns_label = "leoaipvt"

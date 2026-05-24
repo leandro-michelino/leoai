@@ -174,7 +174,9 @@ fi
 
 RUN_ID="$(date +%Y%m%d-%H%M%S)"
 LOG_DIR="${TMPDIR:-/tmp}/leoai-deploy-${RUN_ID}"
+ANSIBLE_TMP_BASE="${TMPDIR:-/tmp}/ansible-local"
 mkdir -p "$LOG_DIR"
+mkdir -p "$ANSIBLE_TMP_BASE"
 
 section "LeoAI Infra Pipeline"
 info "Workspace: $ROOT_DIR"
@@ -215,14 +217,14 @@ if [[ "$SKIP_ANSIBLE" == false ]]; then
 
   run_step "Ansible Bootstrap" "$LOG_DIR/ansible-bootstrap.log" \
     env ANSIBLE_HOST_KEY_CHECKING=False \
-    ANSIBLE_LOCAL_TEMP=/private/tmp/ansible-local \
-    TMPDIR=/private/tmp \
+    ANSIBLE_LOCAL_TEMP="$ANSIBLE_TMP_BASE" \
+    TMPDIR="${TMPDIR:-/tmp}" \
     ansible-playbook -i "$INVENTORY_FILE" playbooks/bootstrap.yml
 
   run_step "Ansible Deploy" "$LOG_DIR/ansible-deploy.log" \
     env ANSIBLE_HOST_KEY_CHECKING=False \
-    ANSIBLE_LOCAL_TEMP=/private/tmp/ansible-local \
-    TMPDIR=/private/tmp \
+    ANSIBLE_LOCAL_TEMP="$ANSIBLE_TMP_BASE" \
+    TMPDIR="${TMPDIR:-/tmp}" \
     ansible-playbook -i "$INVENTORY_FILE" playbooks/deploy.yml
 fi
 

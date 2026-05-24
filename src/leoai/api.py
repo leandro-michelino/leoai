@@ -189,21 +189,21 @@ GUI_HTML = """<!DOCTYPE html>
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(min_length=1)
     with_web: bool = False
     with_rag: bool = True
 
 
 class ObjectStorageIngestRequest(BaseModel):
-    namespace_name: str
-    bucket_name: str
-    object_name: str
+    namespace_name: str = Field(min_length=1)
+    bucket_name: str = Field(min_length=1)
+    object_name: str = Field(min_length=1)
     title: str = ""
 
 
 class WebIngestRequest(BaseModel):
     source_type: Literal["confluence", "sharepoint"]
-    url: str
+    url: str = Field(min_length=1)
     title: str = ""
     auth_header: str = Field(default="", description="Ex.: Bearer <token>")
 
@@ -294,6 +294,8 @@ def ingest_web(body: WebIngestRequest) -> dict[str, str]:
             title=title,
             content=content,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Falha ao ingerir documento web: {exc}") from exc
 

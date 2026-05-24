@@ -3,11 +3,11 @@ data "oci_core_subnet" "target" {
 }
 
 data "oci_core_services" "oracle_services" {
-  count = var.use_private_subnet_with_nat_sgw ? 1 : 0
+  count = var.create_service_gateway ? 1 : 0
 }
 
 locals {
-  oracle_services_network = var.use_private_subnet_with_nat_sgw ? one([
+  oracle_services_network = var.create_service_gateway ? one([
     for svc in data.oci_core_services.oracle_services[0].services :
     svc if can(regex("services in oracle services network", lower(svc.name)))
   ]) : null
@@ -26,7 +26,7 @@ resource "oci_core_nat_gateway" "leoai" {
 }
 
 resource "oci_core_service_gateway" "leoai" {
-  count          = var.use_private_subnet_with_nat_sgw ? 1 : 0
+  count          = var.create_service_gateway ? 1 : 0
   compartment_id = var.compartment_id
   vcn_id         = data.oci_core_subnet.target.vcn_id
   display_name   = "${var.instance_display_name}-sgw"

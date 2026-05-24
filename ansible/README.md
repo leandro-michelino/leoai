@@ -1,21 +1,39 @@
 # Ansible
 
-Automatiza bootstrap e deploy da aplicacao na VM provisionada pelo Terraform.
+Automatiza bootstrap e deploy da aplicacao na VM criada pelo Terraform.
+
+## Playbooks
+- `playbooks/bootstrap.yml`
+  - instala dependencias base do sistema
+  - cria diretorio da aplicacao
+- `playbooks/deploy.yml`
+  - clona/atualiza repo
+  - cria venv e instala projeto
+  - escreve `.env` da app
+  - configura e reinicia servico systemd
 
 ## Fluxo recomendado
-1. Gere/provisione a VM com Terraform.
-2. Confirme o inventario em `inventory/hosts.ini`.
-3. Rode bootstrap:
-   ```bash
-   ansible-playbook playbooks/bootstrap.yml
-   ```
-4. Rode deploy:
-   ```bash
-   ansible-playbook playbooks/deploy.yml
-   ```
+1. Provisione VM com Terraform.
+2. Confirme/gerar inventario em `inventory/hosts.ini`.
+3. Edite `group_vars/all.yml` com valores reais:
+- `leoai_oci_region`
+- `leoai_oci_compartment_id`
+- `leoai_api_auth_key`
+4. Rode bootstrap:
+```bash
+ansible-playbook -i inventory/hosts.ini playbooks/bootstrap.yml
+```
+5. Rode deploy:
+```bash
+ansible-playbook -i inventory/hosts.ini playbooks/deploy.yml
+```
 
-## Observacoes
-- O playbook cria `.env` com variaveis OCI (`OCI_AUTH_MODE`, `OCI_REGION`, `OCI_COMPARTMENT_ID`, `OCI_GENAI_MODEL_ID`).
-- O deploy tambem escreve auth e RAG: `LEOAI_API_AUTH_*`, `RAG_*`, `WEB_SEARCH_*`.
-- A variavel `leoai_api_auth_key` precisa estar definida com chave forte antes do deploy.
-- Para `instance_principal`, garanta Dynamic Group + Policy do OCI Generative AI para a instancia.
+## Seguranca
+- `leoai_api_auth_key` default e placeholder e falha por design no deploy.
+- Defina uma chave forte (>=12 chars) antes de executar.
+- Nao commitar inventario real nem credenciais.
+
+## Pre-requisitos OCI
+Para `instance_principal` funcionar:
+- instancia no Dynamic Group correto
+- policy permitindo uso do Generative AI Inference no compartment alvo

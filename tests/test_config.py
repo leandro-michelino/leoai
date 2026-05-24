@@ -61,3 +61,31 @@ def test_get_settings_rejects_invalid_api_format(monkeypatch):
         assert False, "Era esperado ValueError"
     except ValueError as exc:
         assert "OCI_API_FORMAT" in str(exc)
+
+
+def test_get_settings_rejects_weak_api_key(monkeypatch):
+    monkeypatch.setenv("OCI_COMPARTMENT_ID", "ocid1.compartment.oc1..test")
+    monkeypatch.setenv("OCI_GENAI_MODEL_ID", "meta.llama-3.1-70b-instruct")
+    monkeypatch.setenv("OCI_REGION", "eu-madrid-1")
+    monkeypatch.setenv("LEOAI_API_AUTH_ENABLED", "true")
+    monkeypatch.setenv("LEOAI_API_AUTH_KEY", "short")
+
+    try:
+        get_settings()
+        assert False, "Era esperado ValueError"
+    except ValueError as exc:
+        assert "LEOAI_API_AUTH_KEY" in str(exc)
+
+
+def test_get_settings_rejects_invalid_sampling_values(monkeypatch):
+    monkeypatch.setenv("OCI_COMPARTMENT_ID", "ocid1.compartment.oc1..test")
+    monkeypatch.setenv("OCI_GENAI_MODEL_ID", "meta.llama-3.1-70b-instruct")
+    monkeypatch.setenv("OCI_REGION", "eu-madrid-1")
+    monkeypatch.setenv("LEOAI_API_AUTH_ENABLED", "false")
+    monkeypatch.setenv("OCI_TEMPERATURE", "4")
+
+    try:
+        get_settings()
+        assert False, "Era esperado ValueError"
+    except ValueError as exc:
+        assert "OCI_TEMPERATURE" in str(exc)

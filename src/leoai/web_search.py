@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 
 DUCKDUCKGO_API = "https://api.duckduckgo.com/"
@@ -33,8 +33,9 @@ def search_web_context(query: str, max_results: int = 5, timeout: int = 8) -> st
         }
     )
     url = f"{DUCKDUCKGO_API}?{params}"
+    request = Request(url, headers={"User-Agent": "leoai-web-search/1.0"})
 
-    with urlopen(url, timeout=timeout) as response:
+    with urlopen(request, timeout=timeout) as response:
         payload = json.loads(response.read().decode("utf-8"))
 
     lines: list[str] = []

@@ -30,6 +30,17 @@ variable "use_private_subnet_with_nat_sgw" {
   default     = true
 }
 
+variable "create_service_gateway" {
+  description = "Quando true, cria Service Gateway no VCN alvo (independente do modo privado/publico)"
+  type        = bool
+  default     = true
+
+  validation {
+    condition     = var.use_private_subnet_with_nat_sgw ? var.create_service_gateway : true
+    error_message = "Quando use_private_subnet_with_nat_sgw=true, create_service_gateway tambem deve ser true."
+  }
+}
+
 variable "private_subnet_cidr" {
   description = "CIDR da subnet privada a ser criada quando use_private_subnet_with_nat_sgw=true"
   type        = string

@@ -30,5 +30,5 @@ output "nat_gateway_id" {
 
 output "service_gateway_id" {
   description = "OCID do Service Gateway criado (quando habilitado)"
-  value       = var.use_private_subnet_with_nat_sgw ? oci_core_service_gateway.leoai[0].id : null
+  value       = var.create_service_gateway ? oci_core_service_gateway.leoai[0].id : null
 }

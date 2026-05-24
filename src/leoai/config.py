@@ -110,8 +110,16 @@ def get_settings() -> Settings:
     )
 
     temperature = _env_float("OCI_TEMPERATURE", 0.2)
+    if temperature < 0 or temperature > 2:
+        raise ValueError("OCI_TEMPERATURE deve estar entre 0 e 2.")
+
     top_p = _env_float("OCI_TOP_P", 0.75)
+    if top_p <= 0 or top_p > 1:
+        raise ValueError("OCI_TOP_P deve estar entre 0 (exclusivo) e 1.")
+
     max_tokens = _env_int("OCI_MAX_TOKENS", 600)
+    if max_tokens < 1 or max_tokens > 4096:
+        raise ValueError("OCI_MAX_TOKENS deve estar entre 1 e 4096.")
 
     return Settings(
         compartment_id=compartment_id,
