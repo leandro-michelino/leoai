@@ -33,6 +33,10 @@ STEP_SECONDS=()
 STEP_LOGS=()
 LOG_DIR=""
 SUMMARY_PRINTED=false
+TF_INSTANCE_ID=""
+TF_PUBLIC_IP=""
+TF_PRIVATE_IP=""
+TF_INVENTORY_FILE=""
 
 usage() {
   cat <<'EOF'
@@ -130,6 +134,54 @@ on_exit() {
 }
 
 trap on_exit EXIT
+
+collect_terraform_outputs() {
+  if [[ "$SKIP_TERRAFORM" == true || "$PLAN_ONLY" == true ]]; then
+    return 0
+  fi
+
+  if [[ ! -d "$TF_DIR" ]]; then
+    return 0
+  fi
+
+  TF_INSTANCE_ID="$(terraform -chdir="$TF_DIR" output -raw instance_id 2>/dev/null || true)"
+  TF_PUBLIC_IP="$(terraform -chdir="$TF_DIR" output -raw instance_public_ip 2>/dev/null || true)"
+  TF_PRIVATE_IP="$(terraform -chdir="$TF_DIR" output -raw instance_private_ip 2>/dev/null || true)"
+  TF_INVENTORY_FILE="$(terraform -chdir="$TF_DIR" output -raw ansible_inventory_file 2>/dev/null || true)"
+}
+
+print_deployment_highlights() {
+  section "Deployment Highlights"
+
+  if [[ -n "$TF_INSTANCE_ID" ]]; then
+    info "Instance ID: $TF_INSTANCE_ID"
+  fi
+  if [[ -n "$TF_PUBLIC_IP" ]]; then
+    ok "Public IP: $TF_PUBLIC_IP"
+    info "Dashboard URL: https://$TF_PUBLIC_IP/"
+    info "Health URL: https://$TF_PUBLIC_IP/health"
+  fi
+  if [[ -n "$TF_PRIVATE_IP" ]]; then
+    info "Private IP: $TF_PRIVATE_IP"
+  fi
+  if [[ -n "$TF_INVENTORY_FILE" ]]; then
+    info "Generated inventory: $TF_INVENTORY_FILE"
+  fi
+
+  if [[ -f "$LOG_DIR/ansible-deploy.log" ]]; then
+    info "Ansible recap:"
+    rg -n "^PLAY RECAP|^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+" "$LOG_DIR/ansible-deploy.log" || true
+  fi
+
+  line
+  info "Useful next commands:"
+  if [[ -n "$TF_PUBLIC_IP" ]]; then
+    printf "  curl -k https://%s/health\n" "$TF_PUBLIC_IP"
+  fi
+  if [[ -f "$ANSIBLE_DIR/$INVENTORY_FILE" ]]; then
+    printf "  cd %s && ansible -i %s leoai -b -m shell -a 'systemctl status leoai-api --no-pager'\n" "$ANSIBLE_DIR" "$INVENTORY_FILE"
+  fi
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -229,5 +281,7 @@ if [[ "$SKIP_ANSIBLE" == false ]]; then
 fi
 
 print_summary
+collect_terraform_outputs
+print_deployment_highlights
 
 ok "Infra + bootstrap + deploy completed."

@@ -99,6 +99,7 @@ Validacoes importantes em runtime:
 - Terraform: [`terraform/README.md`](./terraform/README.md)
 - Ansible: [`ansible/README.md`](./ansible/README.md)
 - Pipeline local: [`scripts/bootstrap_infra.sh`](./scripts/bootstrap_infra.sh)
+  - inclui resumo bonito por etapa + highlights finais (IP, URLs e comandos úteis)
 
 Fluxo curto:
 ```bash
