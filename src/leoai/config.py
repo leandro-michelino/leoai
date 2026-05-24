@@ -26,6 +26,9 @@ class Settings:
     rag_embeddings_enabled: bool = True
     rag_embedding_model_id: str = "cohere.embed-multilingual-v3.0"
     rag_rerank_alpha: float = 0.65
+    rag_chunk_size: int = 1200
+    rag_chunk_overlap: int = 180
+    rag_default_top_k: int = 5
     files_store_dir: str = "/opt/leoai/data/files/uploads"
     generated_store_dir: str = "/opt/leoai/data/files/generated"
     files_index_path: str = "/opt/leoai/data/files/index.json"
@@ -118,6 +121,15 @@ def get_settings() -> Settings:
     rag_rerank_alpha = _env_float("RAG_RERANK_ALPHA", 0.65)
     if rag_rerank_alpha < 0 or rag_rerank_alpha > 1:
         raise ValueError("RAG_RERANK_ALPHA deve estar entre 0 e 1.")
+    rag_chunk_size = _env_int("RAG_CHUNK_SIZE", 1200)
+    if rag_chunk_size < 200 or rag_chunk_size > 4000:
+        raise ValueError("RAG_CHUNK_SIZE deve estar entre 200 e 4000.")
+    rag_chunk_overlap = _env_int("RAG_CHUNK_OVERLAP", 180)
+    if rag_chunk_overlap < 0 or rag_chunk_overlap >= rag_chunk_size:
+        raise ValueError("RAG_CHUNK_OVERLAP deve ser >= 0 e menor que RAG_CHUNK_SIZE.")
+    rag_default_top_k = _env_int("RAG_DEFAULT_TOP_K", 5)
+    if rag_default_top_k < 1 or rag_default_top_k > 20:
+        raise ValueError("RAG_DEFAULT_TOP_K deve estar entre 1 e 20.")
 
     files_store_dir = os.getenv("FILES_STORE_DIR", "/opt/leoai/data/files/uploads").strip() or "/opt/leoai/data/files/uploads"
     generated_store_dir = os.getenv("GENERATED_STORE_DIR", "/opt/leoai/data/files/generated").strip() or "/opt/leoai/data/files/generated"
@@ -161,6 +173,9 @@ def get_settings() -> Settings:
         rag_embeddings_enabled=rag_embeddings_enabled,
         rag_embedding_model_id=rag_embedding_model_id,
         rag_rerank_alpha=rag_rerank_alpha,
+        rag_chunk_size=rag_chunk_size,
+        rag_chunk_overlap=rag_chunk_overlap,
+        rag_default_top_k=rag_default_top_k,
         files_store_dir=files_store_dir,
         generated_store_dir=generated_store_dir,
         files_index_path=files_index_path,

@@ -10,6 +10,7 @@ import re
 import uuid
 
 from .config import Settings
+from .file_extractors import extract_content_for_rag
 
 
 SAFE_NAME_RE = re.compile(r"[^a-zA-Z0-9._-]+")
@@ -132,16 +133,5 @@ class FileStore:
         return path
 
     @staticmethod
-    def infer_text_for_rag(filename: str, content_type: str, data: bytes) -> str:
-        lowered_name = (filename or "").lower()
-        lowered_type = (content_type or "").lower()
-
-        if lowered_type.startswith("text/") or lowered_name.endswith((".txt", ".md", ".csv", ".json", ".xml", ".yaml", ".yml", ".log", ".py", ".js", ".ts", ".html", ".css")):
-            return data.decode("utf-8", errors="replace")
-
-        # Arquivos binarios continuam aceitos e catalogados.
-        return (
-            f"Arquivo binario enviado: {filename}\n"
-            f"Content-Type: {content_type or 'application/octet-stream'}\n"
-            f"Tamanho: {len(data)} bytes"
-        )
+    def infer_text_for_rag(filename: str, content_type: str, data: bytes) -> tuple[str, dict[str, str]]:
+        return extract_content_for_rag(filename=filename, content_type=content_type, data=data)

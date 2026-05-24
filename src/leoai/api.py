@@ -4,10 +4,12 @@ import csv
 import hmac
 import io
 import json
+from pathlib import Path
+import time
 from typing import Literal, Optional
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .assistant import LeoAIAssistant
@@ -16,10 +18,12 @@ from .connectors.object_storage_loader import load_object_text
 from .connectors.web_loader import load_web_document
 from .embeddings import build_embedder
 from .file_store import FileStore
+from .job_queue import JobQueue
 from .knowledge_base import KnowledgeBase
 
 
 app = FastAPI(title="LeoAI API", version="0.4.0")
+JOB_QUEUE = JobQueue()
 
 GUI_HTML = """<!DOCTYPE html>
 <html lang="pt-BR">
@@ -84,7 +88,7 @@ GUI_HTML = """<!DOCTYPE html>
     .composer { display:grid; grid-template-columns:1fr auto; gap:10px; margin-top:12px; }
     .opts { display:flex; flex-wrap:wrap; gap:12px; margin-top:8px; color:var(--muted); font-size:.9rem; }
     .exports { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
-    .files-actions { display:grid; grid-template-columns:1fr auto auto; gap:8px; margin-bottom:10px; }
+    .files-actions { display:grid; grid-template-columns:1fr auto auto auto; gap:8px; margin-bottom:10px; }
     .file-list {
       border:1px solid var(--line); border-radius:12px; overflow:auto; max-height:300px;
     }
@@ -149,6 +153,7 @@ GUI_HTML = """<!DOCTYPE html>
               <div class="opts">
                 <label><input id="withWeb" type="checkbox" /> pesquisar web</label>
                 <label><input id="withRag" type="checkbox" checked /> usar RAG v2</label>
+                <label><input id="withStream" type="checkbox" checked /> streaming</label>
               </div>
             </div>
             <button id="sendBtn" type="submit">Enviar</button>
@@ -175,6 +180,7 @@ GUI_HTML = """<!DOCTYPE html>
           <div class="files-actions">
             <input id="filesInput" type="file" multiple />
             <label class="row"><input id="addToRag" type="checkbox" /> indexar no RAG</label>
+            <label class="row"><input id="asyncRag" type="checkbox" checked /> indexação async</label>
             <button id="uploadBtn" type="button">Upload</button>
           </div>
           <div class="row" style="margin-bottom:10px;">
@@ -198,6 +204,7 @@ GUI_HTML = """<!DOCTYPE html>
               <tbody id="filesTableBody"></tbody>
             </table>
           </div>
+          <p id="jobsStatus" class="muted" style="margin:8px 0 0;"></p>
           <p class="muted" style="margin:10px 0 0;">Use upload, listagem e download direto da interface.</p>
         </div>
       </article>
@@ -216,6 +223,7 @@ GUI_HTML = """<!DOCTYPE html>
     const sendBtn = document.getElementById("sendBtn");
     const withWebEl = document.getElementById("withWeb");
     const withRagEl = document.getElementById("withRag");
+    const withStreamEl = document.getElementById("withStream");
     const statusEl = document.getElementById("status");
     const dotEl = document.getElementById("dot");
     const apiKeyEl = document.getElementById("apiKey");
@@ -227,10 +235,12 @@ GUI_HTML = """<!DOCTYPE html>
     const exportFormatEl = document.getElementById("exportFormat");
     const filesInputEl = document.getElementById("filesInput");
     const addToRagEl = document.getElementById("addToRag");
+    const asyncRagEl = document.getElementById("asyncRag");
     const uploadBtn = document.getElementById("uploadBtn");
     const refreshFilesBtn = document.getElementById("refreshFilesBtn");
     const fileKindFilterEl = document.getElementById("fileKindFilter");
     const filesTableBodyEl = document.getElementById("filesTableBody");
+    const jobsStatusEl = document.getElementById("jobsStatus");
     let lastPrompt = "";
     let lastAnswer = "";
 
@@ -327,6 +337,75 @@ GUI_HTML = """<!DOCTYPE html>
       renderFiles(payload.files || []);
     }
 
+    async function runChatStreaming(text) {
+      const botDiv = document.createElement("div");
+      botDiv.className = "msg bot";
+      botDiv.textContent = "";
+      logEl.appendChild(botDiv);
+      logEl.scrollTop = logEl.scrollHeight;
+
+      const response = await fetch("/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          message: text,
+          with_web: Boolean(withWebEl.checked),
+          with_rag: Boolean(withRagEl.checked),
+        }),
+      });
+      if (!response.ok || !response.body) {
+        throw new Error(`Falha no stream (${response.status})`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\\n\\n");
+        buffer = events.pop() || "";
+        for (const evt of events) {
+          const line = evt.trim();
+          if (!line.startsWith("data:")) continue;
+          try {
+            const payload = JSON.parse(line.slice(5).trim());
+            if (payload.type === "chunk" && payload.content) {
+              botDiv.textContent += payload.content;
+              logEl.scrollTop = logEl.scrollHeight;
+            }
+            if (payload.type === "error") {
+              throw new Error(payload.detail || "Erro no stream");
+            }
+          } catch (err) {
+            throw err;
+          }
+        }
+      }
+      return botDiv.textContent || "(sem conteúdo)";
+    }
+
+    async function pollJob(jobId) {
+      jobsStatusEl.textContent = `Job ${jobId} em execução...`;
+      for (let i = 0; i < 120; i++) {
+        const response = await fetch(`/jobs/${encodeURIComponent(jobId)}`, { headers: authHeaders() });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.detail || `Erro HTTP ${response.status}`);
+        if (payload.status === "done") {
+          const indexed = (payload.result && payload.result.indexed) ? payload.result.indexed.length : 0;
+          jobsStatusEl.textContent = `Job ${jobId} concluído: ${indexed} arquivo(s) indexado(s).`;
+          return;
+        }
+        if (payload.status === "failed") {
+          jobsStatusEl.textContent = `Job ${jobId} falhou: ${payload.error || "erro desconhecido"}`;
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      jobsStatusEl.textContent = `Job ${jobId} ainda em execução.`;
+    }
+
     saveKeyBtn.addEventListener("click", () => {
       localStorage.setItem("leoai_api_key", apiKeyEl.value.trim());
       addMessage("sys", "API key salva no navegador.");
@@ -354,20 +433,26 @@ GUI_HTML = """<!DOCTYPE html>
       sendBtn.disabled = true;
       setStatus("warn", "Processando...");
       try {
-        const response = await fetch("/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders() },
-          body: JSON.stringify({
-            message: text,
-            with_web: Boolean(withWebEl.checked),
-            with_rag: Boolean(withRagEl.checked),
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.detail || `Erro HTTP ${response.status}`);
-        addMessage("bot", payload.response || "(sem conteúdo)");
+        let answer = "";
+        if (withStreamEl.checked) {
+          answer = await runChatStreaming(text);
+        } else {
+          const response = await fetch("/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeaders() },
+            body: JSON.stringify({
+              message: text,
+              with_web: Boolean(withWebEl.checked),
+              with_rag: Boolean(withRagEl.checked),
+            }),
+          });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.detail || `Erro HTTP ${response.status}`);
+          answer = payload.response || "(sem conteúdo)";
+          addMessage("bot", answer);
+        }
         lastPrompt = text;
-        lastAnswer = payload.response || "";
+        lastAnswer = answer;
         setStatus("ok", "Online");
       } catch (err) {
         addMessage("bot", `Erro: ${err.message}`);
@@ -418,6 +503,7 @@ GUI_HTML = """<!DOCTYPE html>
       const formData = new FormData();
       for (const file of files) formData.append("files", file);
       formData.append("add_to_rag", addToRagEl.checked ? "true" : "false");
+      formData.append("async_mode", asyncRagEl.checked ? "true" : "false");
       uploadBtn.disabled = true;
       try {
         const response = await fetch("/files/upload", {
@@ -428,6 +514,11 @@ GUI_HTML = """<!DOCTYPE html>
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.detail || `Erro HTTP ${response.status}`);
         addMessage("sys", `Upload concluído: ${payload.uploaded.length} arquivo(s).`);
+        if (payload.job && payload.job.job_id) {
+          pollJob(payload.job.job_id).catch((err) => {
+            jobsStatusEl.textContent = `Erro ao acompanhar job: ${err.message}`;
+          });
+        }
         await refreshFiles();
       } catch (err) {
         addMessage("bot", `Erro no upload: ${err.message}`);
@@ -473,6 +564,7 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
     with_web: bool = False
     with_rag: bool = True
+    rag_filters: Optional[dict[str, str]] = None
 
 
 class ObjectStorageIngestRequest(BaseModel):
@@ -493,6 +585,7 @@ class ChatExportRequest(BaseModel):
     message: str = Field(min_length=1)
     with_web: bool = False
     with_rag: bool = True
+    rag_filters: Optional[dict[str, str]] = None
     filename: str = Field(min_length=1)
     file_format: Literal["txt", "md", "json", "csv"] = "txt"
 
@@ -503,11 +596,18 @@ class GenerateFileRequest(BaseModel):
     content_type: str = "text/plain; charset=utf-8"
 
 
-def _embedding_input(text: str, max_chars: int = 4000) -> str:
-    return text.strip()[:max_chars]
+class RagSearchRequest(BaseModel):
+    query: str = Field(min_length=1)
+    top_k: int = 5
+    filters: Optional[dict[str, str]] = None
 
 
-def _build_chat_answer(prompt: str, with_web: bool, with_rag: bool) -> str:
+class RagIndexJobRequest(BaseModel):
+    file_ids: list[str] = Field(min_length=1)
+    source_type: str = "uploaded_file"
+
+
+def _build_chat_answer(prompt: str, with_web: bool, with_rag: bool, rag_filters: Optional[dict[str, str]] = None) -> str:
     settings = get_settings()
     kb = KnowledgeBase(settings.rag_store_path)
     embedder = build_embedder(settings)
@@ -515,9 +615,10 @@ def _build_chat_answer(prompt: str, with_web: bool, with_rag: bool) -> str:
     if settings.rag_enabled and with_rag:
         rag_context = kb.retrieve_context(
             prompt,
-            top_k=3,
+            top_k=settings.rag_default_top_k,
             embedder=embedder,
             rerank_alpha=settings.rag_rerank_alpha,
+            filters=rag_filters,
         )
 
     assistant = LeoAIAssistant(settings)
@@ -556,6 +657,61 @@ def _build_export_bytes(prompt: str, answer: str, file_format: str) -> tuple[byt
     return answer.encode("utf-8"), "text/plain; charset=utf-8"
 
 
+def _sse_line(payload: dict[str, object]) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _index_uploaded_files_for_rag(
+    *,
+    settings: object,
+    file_ids: list[str],
+    source_type: str = "uploaded_file",
+) -> dict[str, object]:
+    cfg = settings if settings is not None else get_settings()
+    store = FileStore(cfg)
+    kb = KnowledgeBase(cfg.rag_store_path)
+    embedder = build_embedder(cfg)
+
+    indexed: list[dict[str, str | int]] = []
+    skipped: list[str] = []
+    for file_id in file_ids:
+        item = store.get(file_id)
+        if item is None:
+            skipped.append(file_id)
+            continue
+        path = store.open_path(item)
+        data = path.read_bytes()
+        rag_text, extraction_meta = FileStore.infer_text_for_rag(
+            filename=item.original_name,
+            content_type=item.content_type,
+            data=data,
+        )
+
+        doc = kb.add_document(
+            source_type=source_type,
+            source_ref=f"uploaded://{item.file_id}/{item.original_name}",
+            title=item.original_name,
+            content=rag_text,
+            file_id=item.file_id,
+            metadata={
+                "content_type": item.content_type,
+                "extraction_strategy": extraction_meta.get("strategy", ""),
+            },
+            chunk_size=cfg.rag_chunk_size,
+            chunk_overlap=cfg.rag_chunk_overlap,
+            embedder=embedder,
+        )
+        indexed.append(
+            {
+                "file_id": item.file_id,
+                "doc_id": doc.doc_id,
+                "chunks_count": doc.chunks_count,
+                "strategy": extraction_meta.get("strategy", ""),
+            }
+        )
+    return {"indexed": indexed, "skipped_file_ids": skipped}
+
+
 def require_api_key(x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> None:
     settings = get_settings()
     if not settings.api_auth_enabled:
@@ -586,11 +742,45 @@ def chat(body: ChatRequest) -> dict[str, str]:
         raise HTTPException(status_code=400, detail="message não pode ser vazio")
 
     try:
-        answer = _build_chat_answer(prompt=prompt, with_web=body.with_web, with_rag=body.with_rag)
+        answer = _build_chat_answer(
+            prompt=prompt,
+            with_web=body.with_web,
+            with_rag=body.with_rag,
+            rag_filters=body.rag_filters,
+        )
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Falha na chamada OCI GenAI: {exc}") from exc
 
     return {"response": answer}
+
+
+@app.post("/chat/stream", dependencies=[Depends(require_api_key)])
+def chat_stream(body: ChatRequest) -> StreamingResponse:
+    prompt = body.message.strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="message não pode ser vazio")
+
+    def event_generator():
+        started_at = time.time()
+        yield _sse_line({"type": "meta", "status": "started"})
+        try:
+            answer = _build_chat_answer(
+                prompt=prompt,
+                with_web=body.with_web,
+                with_rag=body.with_rag,
+                rag_filters=body.rag_filters,
+            )
+            step = 140
+            for idx in range(0, len(answer), step):
+                chunk = answer[idx : idx + step]
+                yield _sse_line({"type": "chunk", "content": chunk})
+            duration_ms = int((time.time() - started_at) * 1000)
+            yield _sse_line({"type": "done", "duration_ms": duration_ms})
+        except Exception as exc:  # noqa: BLE001
+            yield _sse_line({"type": "error", "detail": str(exc)})
+            yield _sse_line({"type": "done", "duration_ms": int((time.time() - started_at) * 1000)})
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.post("/rag/ingest/object-storage", dependencies=[Depends(require_api_key)])
@@ -607,23 +797,19 @@ def ingest_object_storage(body: ObjectStorageIngestRequest) -> dict[str, str]:
         kb = KnowledgeBase(settings.rag_store_path)
         title = body.title.strip() or body.object_name.strip()
         source_ref = f"oci://{body.namespace_name}/{body.bucket_name}/{body.object_name}"
-        embedding = None
-        if embedder is not None:
-            try:
-                embedding = embedder.embed_text(_embedding_input(content), input_type="SEARCH_DOCUMENT")
-            except Exception:
-                embedding = None
         doc = kb.add_document(
             source_type="object_storage",
             source_ref=source_ref,
             title=title,
             content=content,
-            embedding=embedding,
+            chunk_size=settings.rag_chunk_size,
+            chunk_overlap=settings.rag_chunk_overlap,
+            embedder=embedder,
         )
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Falha ao ingerir Object Storage: {exc}") from exc
 
-    return {"doc_id": doc.doc_id, "source_ref": source_ref}
+    return {"doc_id": doc.doc_id, "source_ref": source_ref, "chunks_count": str(doc.chunks_count)}
 
 
 @app.post("/rag/ingest/web", dependencies=[Depends(require_api_key)])
@@ -634,39 +820,53 @@ def ingest_web(body: WebIngestRequest) -> dict[str, str]:
         content = load_web_document(url=body.url.strip(), auth_header=body.auth_header.strip())
         kb = KnowledgeBase(settings.rag_store_path)
         title = body.title.strip() or body.url.strip()
-        embedding = None
-        if embedder is not None:
-            try:
-                embedding = embedder.embed_text(_embedding_input(content), input_type="SEARCH_DOCUMENT")
-            except Exception:
-                embedding = None
         doc = kb.add_document(
             source_type=body.source_type,
             source_ref=body.url.strip(),
             title=title,
             content=content,
-            embedding=embedding,
+            chunk_size=settings.rag_chunk_size,
+            chunk_overlap=settings.rag_chunk_overlap,
+            embedder=embedder,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Falha ao ingerir documento web: {exc}") from exc
 
-    return {"doc_id": doc.doc_id, "source_ref": body.url.strip()}
+    return {"doc_id": doc.doc_id, "source_ref": body.url.strip(), "chunks_count": str(doc.chunks_count)}
 
 
 @app.get("/rag/sources", dependencies=[Depends(require_api_key)])
-def rag_sources() -> dict[str, list[dict[str, str]]]:
+def rag_sources() -> dict[str, list[dict[str, str | int]]]:
     settings = get_settings()
     kb = KnowledgeBase(settings.rag_store_path)
     return {"sources": kb.list_sources()}
+
+
+@app.post("/rag/search", dependencies=[Depends(require_api_key)])
+def rag_search(body: RagSearchRequest) -> dict[str, object]:
+    settings = get_settings()
+    kb = KnowledgeBase(settings.rag_store_path)
+    embedder = build_embedder(settings)
+    top_k = max(1, min(body.top_k, 20))
+    context = kb.retrieve_context(
+        body.query.strip(),
+        top_k=top_k,
+        embedder=embedder,
+        rerank_alpha=settings.rag_rerank_alpha,
+        filters=body.filters,
+    )
+    return {"query": body.query, "top_k": top_k, "filters": body.filters or {}, "context": context}
 
 
 @app.post("/files/upload", dependencies=[Depends(require_api_key)])
 async def upload_files(
     files: list[UploadFile] = File(...),
     add_to_rag: bool = Form(default=False),
-) -> dict[str, list[dict[str, str | int]]]:
+    async_mode: bool = Form(default=True),
+    background_tasks: BackgroundTasks = None,
+) -> dict[str, object]:
     if not files:
         raise HTTPException(status_code=400, detail="Envie ao menos 1 arquivo.")
     if len(files) > 10:
@@ -675,11 +875,9 @@ async def upload_files(
     settings = get_settings()
     max_bytes = settings.max_upload_size_mb * 1024 * 1024
     store = FileStore(settings)
-    kb = KnowledgeBase(settings.rag_store_path)
-    embedder = build_embedder(settings)
 
     uploaded_items: list[dict[str, str | int]] = []
-    rag_items: list[dict[str, str | int]] = []
+    uploaded_ids: list[str] = []
 
     for file in files:
         name = (file.filename or "file.bin").strip() or "file.bin"
@@ -696,25 +894,40 @@ async def upload_files(
             data=data,
         )
         uploaded_items.append(_serialize_file_meta(item))
+        uploaded_ids.append(item.file_id)
 
-        if add_to_rag and settings.rag_enabled:
-            rag_text = FileStore.infer_text_for_rag(name, file.content_type or "", data)
-            embedding = None
-            if embedder is not None:
-                try:
-                    embedding = embedder.embed_text(_embedding_input(rag_text), input_type="SEARCH_DOCUMENT")
-                except Exception:
-                    embedding = None
-            doc = kb.add_document(
+    if not add_to_rag or not settings.rag_enabled:
+        return {"uploaded": uploaded_items, "rag_indexed": [], "job": None}
+
+    if async_mode:
+        job = JOB_QUEUE.create(
+            kind="rag_index_uploaded_files",
+            payload={"file_ids": uploaded_ids, "source_type": "uploaded_file"},
+        )
+
+        def _runner():
+            return _index_uploaded_files_for_rag(
+                settings=settings,
+                file_ids=uploaded_ids,
                 source_type="uploaded_file",
-                source_ref=f"uploaded://{item.file_id}/{name}",
-                title=name,
-                content=rag_text,
-                embedding=embedding,
             )
-            rag_items.append({"doc_id": doc.doc_id, "file_id": item.file_id, "title": name})
 
-    return {"uploaded": uploaded_items, "rag_indexed": rag_items}
+        if background_tasks is not None:
+            background_tasks.add_task(JOB_QUEUE.run_guarded, job.job_id, _runner)
+        else:
+            JOB_QUEUE.run_guarded(job.job_id, _runner)
+        return {
+            "uploaded": uploaded_items,
+            "rag_indexed": [],
+            "job": {"job_id": job.job_id, "status": job.status, "kind": job.kind},
+        }
+
+    result = _index_uploaded_files_for_rag(
+        settings=settings,
+        file_ids=uploaded_ids,
+        source_type="uploaded_file",
+    )
+    return {"uploaded": uploaded_items, "rag_indexed": result.get("indexed", []), "job": None}
 
 
 @app.get("/files", dependencies=[Depends(require_api_key)])
@@ -742,6 +955,60 @@ def download_file(file_id: str) -> FileResponse:
     )
 
 
+@app.post("/jobs/rag-index-files", dependencies=[Depends(require_api_key)])
+def enqueue_rag_index_files(body: RagIndexJobRequest, background_tasks: BackgroundTasks) -> dict[str, str]:
+    settings = get_settings()
+    file_ids = [f.strip() for f in body.file_ids if f.strip()]
+    if not file_ids:
+        raise HTTPException(status_code=400, detail="file_ids não pode ser vazio.")
+
+    job = JOB_QUEUE.create(
+        kind="rag_index_uploaded_files",
+        payload={"file_ids": file_ids, "source_type": body.source_type},
+    )
+
+    def _runner():
+        return _index_uploaded_files_for_rag(settings=settings, file_ids=file_ids, source_type=body.source_type)
+
+    background_tasks.add_task(JOB_QUEUE.run_guarded, job.job_id, _runner)
+    return {"job_id": job.job_id, "status": job.status, "kind": job.kind}
+
+
+@app.get("/jobs/{job_id}", dependencies=[Depends(require_api_key)])
+def get_job(job_id: str) -> dict[str, object]:
+    job = JOB_QUEUE.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job não encontrado.")
+    return {
+        "job_id": job.job_id,
+        "kind": job.kind,
+        "status": job.status,
+        "created_at": job.created_at,
+        "updated_at": job.updated_at,
+        "payload": job.payload,
+        "result": job.result,
+        "error": job.error,
+    }
+
+
+@app.get("/jobs", dependencies=[Depends(require_api_key)])
+def list_jobs(limit: int = 50) -> dict[str, list[dict[str, object]]]:
+    safe_limit = max(1, min(limit, 200))
+    jobs = JOB_QUEUE.list(limit=safe_limit)
+    return {
+        "jobs": [
+            {
+                "job_id": job.job_id,
+                "kind": job.kind,
+                "status": job.status,
+                "created_at": job.created_at,
+                "updated_at": job.updated_at,
+            }
+            for job in jobs
+        ]
+    }
+
+
 @app.post("/files/generate", dependencies=[Depends(require_api_key)])
 def generate_file(body: GenerateFileRequest) -> dict[str, object]:
     settings = get_settings()
@@ -762,7 +1029,12 @@ def chat_export(body: ChatExportRequest) -> dict[str, object]:
         raise HTTPException(status_code=400, detail="message não pode ser vazio")
 
     try:
-        answer = _build_chat_answer(prompt=prompt, with_web=body.with_web, with_rag=body.with_rag)
+        answer = _build_chat_answer(
+            prompt=prompt,
+            with_web=body.with_web,
+            with_rag=body.with_rag,
+            rag_filters=body.rag_filters,
+        )
         content, content_type = _build_export_bytes(prompt=prompt, answer=answer, file_format=body.file_format)
         settings = get_settings()
         store = FileStore(settings)

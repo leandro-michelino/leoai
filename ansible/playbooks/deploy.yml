@@ -76,6 +76,9 @@
           RAG_EMBEDDINGS_ENABLED={{ leoai_rag_embeddings_enabled }}
           RAG_EMBEDDING_MODEL_ID={{ leoai_rag_embedding_model_id }}
           RAG_RERANK_ALPHA={{ leoai_rag_rerank_alpha }}
+          RAG_CHUNK_SIZE={{ leoai_rag_chunk_size }}
+          RAG_CHUNK_OVERLAP={{ leoai_rag_chunk_overlap }}
+          RAG_DEFAULT_TOP_K={{ leoai_rag_default_top_k }}
           FILES_STORE_DIR={{ leoai_files_store_dir }}
           GENERATED_STORE_DIR={{ leoai_generated_store_dir }}
           FILES_INDEX_PATH={{ leoai_files_index_path }}
@@ -203,6 +206,15 @@
         leoai_tls_key_path: "/etc/letsencrypt/live/{{ leoai_tls_domain }}/privkey.pem"
       when: leoai_tls_mode == "letsencrypt"
 
+    - name: Ensure cron job for certbot renew (Let's Encrypt)
+      ansible.builtin.cron:
+        name: "leoai certbot renew"
+        minute: "17"
+        hour: "3"
+        user: root
+        job: "certbot renew --quiet --post-hook 'systemctl reload nginx'"
+      when: leoai_tls_mode == "letsencrypt"
+
     - name: Configure Nginx reverse proxy
       ansible.builtin.template:
         src: "../templates/leoai-nginx.conf.j2"
@@ -288,12 +300,14 @@
       ansible.builtin.set_fact:
         leoai_access_host: "{{ ansible_host | default(inventory_hostname) }}"
         leoai_access_scheme: "{{ 'http' if leoai_tls_mode == 'disabled' else 'https' }}"
+        leoai_access_domain: "{{ leoai_tls_domain if (leoai_tls_domain | length > 0) else (ansible_host | default(inventory_hostname)) }}"
 
     - name: Deployment handover summary
       ansible.builtin.debug:
         msg:
           - "LeoAI deployment concluido e servicos ativos."
           - "Dashboard: {{ leoai_access_scheme }}://{{ leoai_access_host }}/"
+          - "Dashboard (domain): {{ leoai_access_scheme }}://{{ leoai_access_domain }}/"
           - "Health: {{ leoai_access_scheme }}://{{ leoai_access_host }}/health"
           - "Auth verify: {{ leoai_access_scheme }}://{{ leoai_access_host }}/auth/verify"
           - "TLS mode: {{ leoai_tls_mode }}"

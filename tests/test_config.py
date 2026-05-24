@@ -105,3 +105,31 @@ def test_get_settings_rejects_invalid_rerank_alpha(monkeypatch):
         assert False, "Era esperado ValueError"
     except ValueError as exc:
         assert "RAG_RERANK_ALPHA" in str(exc)
+
+
+def test_get_settings_rejects_invalid_chunk_settings(monkeypatch):
+    monkeypatch.setenv("OCI_COMPARTMENT_ID", "ocid1.compartment.oc1..test")
+    monkeypatch.setenv("OCI_GENAI_MODEL_ID", "meta.llama-3.1-70b-instruct")
+    monkeypatch.setenv("OCI_REGION", "eu-madrid-1")
+    monkeypatch.setenv("LEOAI_API_AUTH_ENABLED", "false")
+    monkeypatch.setenv("RAG_CHUNK_SIZE", "100")
+
+    try:
+        get_settings()
+        assert False, "Era esperado ValueError"
+    except ValueError as exc:
+        assert "RAG_CHUNK_SIZE" in str(exc)
+
+
+def test_get_settings_rejects_invalid_rag_default_top_k(monkeypatch):
+    monkeypatch.setenv("OCI_COMPARTMENT_ID", "ocid1.compartment.oc1..test")
+    monkeypatch.setenv("OCI_GENAI_MODEL_ID", "meta.llama-3.1-70b-instruct")
+    monkeypatch.setenv("OCI_REGION", "eu-madrid-1")
+    monkeypatch.setenv("LEOAI_API_AUTH_ENABLED", "false")
+    monkeypatch.setenv("RAG_DEFAULT_TOP_K", "50")
+
+    try:
+        get_settings()
+        assert False, "Era esperado ValueError"
+    except ValueError as exc:
+        assert "RAG_DEFAULT_TOP_K" in str(exc)

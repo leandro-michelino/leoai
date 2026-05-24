@@ -8,23 +8,23 @@ Este documento descreve a arquitetura atual do projeto de forma operacional.
 +---------------------------+         +--------------------------------------+
 | CLI (leoai.cli)           |         | FastAPI (leoai.api)                  |
 | - prompt interativo       |         | - /chat                              |
-| - chama LeoAIAssistant    |         | - /auth/verify                       |
-+-------------+-------------+         | - /rag/ingest/object-storage         |
+| - chama LeoAIAssistant    |         | - /chat/stream (SSE)                 |
++-------------+-------------+         | - /auth/verify                       |
+              |                       | - /rag/ingest/object-storage         |
               |                       | - /rag/ingest/web                    |
-              |                       | - /rag/sources                       |
-              v                       +-------------------+------------------+
+              v                       | - /rag/sources                        |
+      +-------+-------------------+   | - /rag/search                         |
+      | LeoAIAssistant            |<--| - /files/* + /jobs/*                  |
+      | - monta prompt/contexto   |   +-------------------+------------------+
+      | - formato COHERE/GENERIC  |                       |
       +-------+-------------------+                       |
-      | LeoAIAssistant            |<----------------------+
-      | - monta prompt/contexto   |
-      | - formato COHERE/GENERIC  |
-      +-------+-------------------+
-              |
-              v
-      +-------+-----------------------------------------------+
-      | OCI Generative AI Inference                           |
-      | - chat model                                          |
-      | - embed model (RAG v2)                                |
-      +-------------------------------------------------------+
+              |                                           |
+              v                                           |
+      +-------+-------------------------------------------+
+      | OCI Generative AI Inference                       |
+      | - chat model                                      |
+      | - embed model (RAG v2)                            |
+      +---------------------------------------------------+
 ```
 
 ## 2) Exposicao publica (Nginx + TLS)
@@ -36,11 +36,13 @@ Internet
    +--> 443 (TLS)
            |
            v
-      +----+------------------+
-      | Nginx reverse proxy   |
-      | - rate limit /chat    |
-      | - security headers    |
-      +----+------------------+
+      +----+------------------------------+
+      | Nginx reverse proxy               |
+      | - rate limit /chat                |
+      | - /chat/stream com buffering off  |
+      | - client_max_body_size dinamico   |
+      | - security headers                |
+      +----+------------------------------+
            |
            v
       127.0.0.1:8000
@@ -53,7 +55,7 @@ Internet
 User prompt
    |
    v
-/chat
+/chat ou /chat/stream
    |
    +--> with_web=true  --> DuckDuckGo API (web_search.py)
    |
@@ -62,9 +64,11 @@ User prompt
            v
      KnowledgeBase JSON
            |
+           +--> chunking (size/overlap)
            +--> lexical score (tokens)
            +--> semantic score (cosine embedding)
            +--> reranking hibrido (alpha)
+           +--> filtros (source_type/source_ref/file_id/...)
            |
            v
      Contexto final para o modelo
@@ -75,9 +79,47 @@ User prompt
 ```text
 /rag/ingest/object-storage --> OCI Object Storage --> texto --> embedding --> KnowledgeBase JSON
 /rag/ingest/web            --> URL http/https      --> texto --> embedding --> KnowledgeBase JSON
+/files/upload              --> ate 10 arquivos     --> extracao --> (sync/async) RAG
 ```
 
-## 5) Infraestrutura OCI (Terraform)
+## 5) Upload, extracao e jobs assíncronos
+
+```text
+Cliente GUI/API
+   |
+   v
+/files/upload (multipart)
+   |
+   +--> valida limite (qtd <= 10, tamanho <= MAX_UPLOAD_SIZE_MB)
+   +--> persistencia em FileStore (uploads/) + index.json
+   |
+   +--> add_to_rag=true?
+         |
+         +--> nao: retorno imediato
+         +--> sim + async_mode=false: indexacao inline
+         +--> sim + async_mode=true: JobQueue + BackgroundTask
+```
+
+```text
+Extratores suportados (RAG):
+- PDF (pypdf)
+- DOCX (python-docx)
+- XLSX/XLSM (openpyxl)
+- PPTX (python-pptx)
+- imagens (Pillow: metadata)
+- texto/codigo (decode utf-8)
+- fallback binario/zip metadata
+```
+
+```text
+/jobs/*
+   |
+   +--> JobQueue em memoria
+   +--> status: queued -> running -> done/failed
+   +--> polling no frontend por job_id
+```
+
+## 6) Infraestrutura OCI (Terraform)
 
 ```text
                          +------------------------------+
@@ -104,7 +146,7 @@ User prompt
                  +----------------+                            +-------------+
 ```
 
-## 6) Deploy (Ansible)
+## 7) Deploy (Ansible)
 
 ```text
 Terraform apply
@@ -123,5 +165,7 @@ ansible deploy.yml
    - instala systemd leoai-api.service
    - instala/configura nginx
    - configura TLS (self_signed ou letsencrypt)
+   - (letsencrypt) agenda certbot renew com reload nginx
+   - imprime handover final com URLs (dashboard/health/auth)
    - restart dos servicos
 ```

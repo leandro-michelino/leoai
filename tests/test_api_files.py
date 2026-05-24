@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+import leoai.api as api_module
 from leoai.api import app
 
 
@@ -58,3 +59,51 @@ def test_generate_and_download_file(monkeypatch, tmp_path):
     download = client.get(f"/files/{file_id}/download")
     assert download.status_code == 200
     assert download.content == b"conteudo gerado"
+
+
+def test_chat_stream_returns_sse_chunks(monkeypatch, tmp_path):
+    _set_base_env(monkeypatch, tmp_path)
+    client = TestClient(app)
+
+    monkeypatch.setattr(api_module, "_build_chat_answer", lambda **_: "resposta streaming")
+
+    response = client.post(
+        "/chat/stream",
+        json={"message": "oi", "with_web": False, "with_rag": False},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    body = response.text
+    assert '"type": "meta"' in body
+    assert '"type": "chunk"' in body
+    assert "resposta streaming" in body
+    assert '"type": "done"' in body
+
+
+def test_upload_with_async_rag_creates_job(monkeypatch, tmp_path):
+    _set_base_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("RAG_ENABLED", "true")
+    monkeypatch.setenv("RAG_STORE_PATH", str(tmp_path / "kb.json"))
+    client = TestClient(app)
+
+    monkeypatch.setattr(
+        api_module,
+        "_index_uploaded_files_for_rag",
+        lambda **_: {"indexed": [{"file_id": "x", "doc_id": "doc", "chunks_count": 1}], "skipped_file_ids": []},
+    )
+
+    response = client.post(
+        "/files/upload",
+        data={"add_to_rag": "true", "async_mode": "true"},
+        files=[("files", ("a.txt", b"alpha", "text/plain"))],
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["job"] is not None
+    job_id = payload["job"]["job_id"]
+
+    job_response = client.get(f"/jobs/{job_id}")
+    assert job_response.status_code == 200
+    job = job_response.json()
+    assert job["status"] == "done"
+    assert job["result"]["indexed"][0]["chunks_count"] == 1

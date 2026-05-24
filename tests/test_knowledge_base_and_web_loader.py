@@ -38,15 +38,15 @@ def test_knowledge_base_hybrid_reranking_prefers_semantic_match(tmp_path):
         source_type="test",
         source_ref="doc://oracle",
         title="Oracle Doc",
-        content="informacoes sobre cloud e servicos",
-        embedding=[1.0, 0.0],
+        content="oracle cloud e servicos",
+        embedder=_FakeEmbedder(),
     )
     kb.add_document(
         source_type="test",
         source_ref="doc://finance",
         title="Financeiro",
         content="faturamento consolidado",
-        embedding=[0.0, 1.0],
+        embedder=_FakeEmbedder(),
     )
 
     context = kb.retrieve_context(

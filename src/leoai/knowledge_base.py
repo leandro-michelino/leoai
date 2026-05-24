@@ -13,59 +13,106 @@ TOKEN_RE = re.compile(r"[a-zA-Z0-9_]{3,}")
 
 
 @dataclass
-class KnowledgeDoc:
+class IngestedDocument:
     doc_id: str
+    chunks_count: int
+
+
+@dataclass
+class KnowledgeChunk:
+    chunk_id: str
+    source_doc_id: str
     source_type: str
     source_ref: str
     title: str
     content: str
     created_at: str
     embedding: list[float] | None = None
+    file_id: str = ""
+    metadata: dict[str, str] | None = None
 
 
 class KnowledgeBase:
     def __init__(self, path: str) -> None:
         self.path = path
-        self._docs: list[KnowledgeDoc] = []
+        self._chunks: list[KnowledgeChunk] = []
         self._load()
 
     def _load(self) -> None:
         if not os.path.exists(self.path):
-            self._docs = []
+            self._chunks = []
             return
         with open(self.path, "r", encoding="utf-8") as f:
             payload = json.load(f)
-        docs: list[KnowledgeDoc] = []
-        for item in payload:
-            embedding_raw = item.get("embedding")
-            embedding: list[float] | None
-            if isinstance(embedding_raw, list):
-                try:
-                    embedding = [float(v) for v in embedding_raw]
-                except (TypeError, ValueError):
-                    embedding = None
-            else:
-                embedding = None
 
-            docs.append(
-                KnowledgeDoc(
-                    doc_id=str(item.get("doc_id", "")),
+        chunks: list[KnowledgeChunk] = []
+        for item in payload:
+            # Compatibilidade retroativa com formato antigo (um item por documento).
+            is_old_doc = "chunk_id" not in item and "doc_id" in item and "content" in item
+            if is_old_doc:
+                old_doc_id = str(item.get("doc_id") or str(uuid.uuid4()))
+                chunks.append(
+                    KnowledgeChunk(
+                        chunk_id=str(uuid.uuid4()),
+                        source_doc_id=old_doc_id,
+                        source_type=str(item.get("source_type", "")),
+                        source_ref=str(item.get("source_ref", "")),
+                        title=str(item.get("title", "")),
+                        content=str(item.get("content", "")),
+                        created_at=str(item.get("created_at", "")),
+                        embedding=self._coerce_embedding(item.get("embedding")),
+                        file_id="",
+                        metadata={},
+                    )
+                )
+                continue
+
+            chunks.append(
+                KnowledgeChunk(
+                    chunk_id=str(item.get("chunk_id", "")),
+                    source_doc_id=str(item.get("source_doc_id", "")),
                     source_type=str(item.get("source_type", "")),
                     source_ref=str(item.get("source_ref", "")),
                     title=str(item.get("title", "")),
                     content=str(item.get("content", "")),
                     created_at=str(item.get("created_at", "")),
-                    embedding=embedding,
+                    embedding=self._coerce_embedding(item.get("embedding")),
+                    file_id=str(item.get("file_id", "")),
+                    metadata=item.get("metadata") if isinstance(item.get("metadata"), dict) else {},
                 )
             )
-        self._docs = docs
+        self._chunks = chunks
+
+    @staticmethod
+    def _coerce_embedding(raw: object) -> list[float] | None:
+        if not isinstance(raw, list):
+            return None
+        try:
+            return [float(v) for v in raw]
+        except (TypeError, ValueError):
+            return None
 
     def _save(self) -> None:
         parent_dir = os.path.dirname(self.path)
         if parent_dir:
             os.makedirs(parent_dir, exist_ok=True)
         with open(self.path, "w", encoding="utf-8") as f:
-            json.dump([asdict(doc) for doc in self._docs], f, ensure_ascii=False, indent=2)
+            json.dump([asdict(chunk) for chunk in self._chunks], f, ensure_ascii=False, indent=2)
+
+    @staticmethod
+    def _chunk_text(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
+        clean = text.strip()
+        if not clean:
+            return [""]
+        chunks: list[str] = []
+        start = 0
+        step = max(1, chunk_size - chunk_overlap)
+        while start < len(clean):
+            chunk = clean[start : start + chunk_size].strip()
+            if chunk:
+                chunks.append(chunk)
+            start += step
+        return chunks or [clean]
 
     def add_document(
         self,
@@ -73,32 +120,65 @@ class KnowledgeBase:
         source_ref: str,
         title: str,
         content: str,
-        embedding: list[float] | None = None,
-    ) -> KnowledgeDoc:
-        doc = KnowledgeDoc(
-            doc_id=str(uuid.uuid4()),
-            source_type=source_type,
-            source_ref=source_ref,
-            title=title.strip() or source_ref,
-            content=content.strip(),
-            created_at=datetime.now(timezone.utc).isoformat(),
-            embedding=embedding,
-        )
-        self._docs.append(doc)
-        self._save()
-        return doc
+        *,
+        file_id: str = "",
+        metadata: dict[str, str] | None = None,
+        chunk_size: int = 1200,
+        chunk_overlap: int = 180,
+        embedder: object | None = None,
+    ) -> IngestedDocument:
+        source_doc_id = str(uuid.uuid4())
+        created_at = datetime.now(timezone.utc).isoformat()
+        title_clean = title.strip() or source_ref
+        metadata_clean = metadata or {}
 
-    def list_sources(self) -> list[dict[str, str]]:
-        return [
-            {
-                "doc_id": doc.doc_id,
-                "source_type": doc.source_type,
-                "source_ref": doc.source_ref,
-                "title": doc.title,
-                "created_at": doc.created_at,
-            }
-            for doc in self._docs
-        ]
+        pieces = self._chunk_text(content, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        inserted = 0
+        for piece in pieces:
+            embedding = None
+            if embedder is not None and piece.strip():
+                try:
+                    embedding = embedder.embed_text(piece, input_type="SEARCH_DOCUMENT")
+                except Exception:
+                    embedding = None
+
+            self._chunks.append(
+                KnowledgeChunk(
+                    chunk_id=str(uuid.uuid4()),
+                    source_doc_id=source_doc_id,
+                    source_type=source_type,
+                    source_ref=source_ref,
+                    title=title_clean,
+                    content=piece,
+                    created_at=created_at,
+                    embedding=embedding,
+                    file_id=file_id,
+                    metadata=metadata_clean,
+                )
+            )
+            inserted += 1
+
+        self._save()
+        return IngestedDocument(doc_id=source_doc_id, chunks_count=inserted)
+
+    def list_sources(self) -> list[dict[str, str | int]]:
+        grouped: dict[str, dict[str, str | int]] = {}
+        for chunk in self._chunks:
+            key = chunk.source_doc_id
+            if key not in grouped:
+                grouped[key] = {
+                    "doc_id": chunk.source_doc_id,
+                    "source_type": chunk.source_type,
+                    "source_ref": chunk.source_ref,
+                    "title": chunk.title,
+                    "created_at": chunk.created_at,
+                    "file_id": chunk.file_id,
+                    "chunks_count": 0,
+                }
+            grouped[key]["chunks_count"] = int(grouped[key]["chunks_count"]) + 1
+        items = list(grouped.values())
+        items.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
+        return items
 
     @staticmethod
     def _tokens(text: str) -> set[str]:
@@ -116,18 +196,49 @@ class KnowledgeBase:
         return dot / (norm_a * norm_b)
 
     @staticmethod
-    def _lexical_score(query_tokens: set[str], doc_tokens: set[str]) -> float:
-        if not query_tokens or not doc_tokens:
+    def _lexical_score(query_tokens: set[str], chunk_tokens: set[str]) -> float:
+        if not query_tokens or not chunk_tokens:
             return 0.0
-        intersection = len(query_tokens.intersection(doc_tokens))
+        intersection = len(query_tokens.intersection(chunk_tokens))
         if intersection == 0:
             return 0.0
-        # Similaridade de Dice para manter score em [0,1]
-        return (2.0 * intersection) / (len(query_tokens) + len(doc_tokens))
+        return (2.0 * intersection) / (len(query_tokens) + len(chunk_tokens))
 
-    def retrieve_context(self, query: str, top_k: int = 3, embedder: object | None = None, rerank_alpha: float = 0.65) -> str:
+    @staticmethod
+    def _matches_filters(chunk: KnowledgeChunk, filters: dict[str, str] | None) -> bool:
+        if not filters:
+            return True
+        source_type = filters.get("source_type", "").strip()
+        if source_type and chunk.source_type != source_type:
+            return False
+        source_ref = filters.get("source_ref", "").strip()
+        if source_ref and chunk.source_ref != source_ref:
+            return False
+        file_id = filters.get("file_id", "").strip()
+        if file_id and chunk.file_id != file_id:
+            return False
+        title_contains = filters.get("title_contains", "").strip().lower()
+        if title_contains and title_contains not in chunk.title.lower():
+            return False
+        created_after = filters.get("created_after", "").strip()
+        if created_after and chunk.created_at < created_after:
+            return False
+        created_before = filters.get("created_before", "").strip()
+        if created_before and chunk.created_at > created_before:
+            return False
+        return True
+
+    def retrieve_context(
+        self,
+        query: str,
+        top_k: int = 5,
+        *,
+        embedder: object | None = None,
+        rerank_alpha: float = 0.65,
+        filters: dict[str, str] | None = None,
+    ) -> str:
         query_tokens = self._tokens(query)
-        if not self._docs:
+        if not self._chunks:
             return ""
 
         query_embedding: list[float] | None = None
@@ -137,35 +248,34 @@ class KnowledgeBase:
             except Exception:
                 query_embedding = None
 
-        scored: list[tuple[float, float, float, KnowledgeDoc]] = []
-        for doc in self._docs:
-            doc_tokens = self._tokens(f"{doc.title}\n{doc.content}")
-            lexical = self._lexical_score(query_tokens, doc_tokens)
+        scored: list[tuple[float, float, float, KnowledgeChunk]] = []
+        for chunk in self._chunks:
+            if not self._matches_filters(chunk, filters):
+                continue
+            chunk_tokens = self._tokens(f"{chunk.title}\n{chunk.content}")
+            lexical = self._lexical_score(query_tokens, chunk_tokens)
 
             semantic = 0.0
-            if query_embedding is not None and doc.embedding:
-                cosine = self._cosine_similarity(query_embedding, doc.embedding)
+            if query_embedding is not None and chunk.embedding:
+                cosine = self._cosine_similarity(query_embedding, chunk.embedding)
                 semantic = max(0.0, (cosine + 1.0) / 2.0)
 
-            if query_embedding is None:
-                final_score = lexical
-            else:
-                final_score = (1.0 - rerank_alpha) * lexical + rerank_alpha * semantic
-
+            final_score = lexical if query_embedding is None else (1.0 - rerank_alpha) * lexical + rerank_alpha * semantic
             if final_score > 0:
-                scored.append((final_score, lexical, semantic, doc))
+                scored.append((final_score, lexical, semantic, chunk))
 
         scored.sort(key=lambda item: item[0], reverse=True)
-        top_docs = scored[:top_k]
-        if not top_docs:
+        top_chunks = scored[:top_k]
+        if not top_chunks:
             return ""
 
         parts: list[str] = []
-        for idx, (final_score, lexical, semantic, doc) in enumerate(top_docs, start=1):
-            snippet = doc.content[:1800].strip()
+        for idx, (final_score, lexical, semantic, chunk) in enumerate(top_chunks, start=1):
+            snippet = chunk.content[:1800].strip()
             parts.append(
-                f"[Fonte {idx}] {doc.title} ({doc.source_type})\n"
-                f"Ref: {doc.source_ref}\n"
+                f"[Fonte {idx}] {chunk.title} ({chunk.source_type})\n"
+                f"Ref: {chunk.source_ref}\n"
+                f"Chunk: {chunk.chunk_id}\n"
                 f"Score: final={final_score:.4f} lexical={lexical:.4f} semantic={semantic:.4f}\n"
                 f"Trecho: {snippet}"
             )
