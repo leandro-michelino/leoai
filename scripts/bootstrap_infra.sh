@@ -136,7 +136,7 @@ on_exit() {
 trap on_exit EXIT
 
 collect_terraform_outputs() {
-  if [[ "$SKIP_TERRAFORM" == true || "$PLAN_ONLY" == true ]]; then
+  if [[ "$SKIP_TERRAFORM" == true ]]; then
     return 0
   fi
 
@@ -160,6 +160,7 @@ print_deployment_highlights() {
     ok "Public IP: $TF_PUBLIC_IP"
     info "Dashboard URL: https://$TF_PUBLIC_IP/"
     info "Health URL: https://$TF_PUBLIC_IP/health"
+    info "Auth verify URL: https://$TF_PUBLIC_IP/auth/verify"
   fi
   if [[ -n "$TF_PRIVATE_IP" ]]; then
     info "Private IP: $TF_PRIVATE_IP"
@@ -177,9 +178,13 @@ print_deployment_highlights() {
   info "Useful next commands:"
   if [[ -n "$TF_PUBLIC_IP" ]]; then
     printf "  curl -k https://%s/health\n" "$TF_PUBLIC_IP"
+    printf "  open https://%s/\n" "$TF_PUBLIC_IP"
   fi
   if [[ -f "$ANSIBLE_DIR/$INVENTORY_FILE" ]]; then
     printf "  cd %s && ansible -i %s leoai -b -m shell -a 'systemctl status leoai-api --no-pager'\n" "$ANSIBLE_DIR" "$INVENTORY_FILE"
+  fi
+  if [[ -z "$TF_PUBLIC_IP" ]]; then
+    warn "No public IP found in Terraform state yet."
   fi
 }
 
