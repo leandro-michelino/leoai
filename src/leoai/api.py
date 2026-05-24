@@ -88,7 +88,7 @@ GUI_HTML = """<!DOCTYPE html>
     .composer { display:grid; grid-template-columns:1fr auto; gap:10px; margin-top:12px; }
     .opts { display:flex; flex-wrap:wrap; gap:12px; margin-top:8px; color:var(--muted); font-size:.9rem; }
     .exports { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
-    .files-actions { display:grid; grid-template-columns:1fr auto auto auto; gap:8px; margin-bottom:10px; }
+    .files-actions { display:grid; grid-template-columns:1fr auto; gap:8px; margin-bottom:10px; }
     .file-list {
       border:1px solid var(--line); border-radius:12px; overflow:auto; max-height:300px;
     }
@@ -179,8 +179,8 @@ GUI_HTML = """<!DOCTYPE html>
         <div class="card-body">
           <div class="files-actions">
             <input id="filesInput" type="file" multiple />
-            <label class="row"><input id="addToRag" type="checkbox" /> indexar no RAG</label>
-            <label class="row"><input id="asyncRag" type="checkbox" checked /> indexação async</label>
+            <span class="muted">indexação no RAG: automática</span>
+            <span class="muted">modo de indexação: assíncrono automático</span>
             <button id="uploadBtn" type="button">Upload</button>
           </div>
           <div class="row" style="margin-bottom:10px;">
@@ -233,8 +233,6 @@ GUI_HTML = """<!DOCTYPE html>
     const exportFilenameEl = document.getElementById("exportFilename");
     const exportFormatEl = document.getElementById("exportFormat");
     const filesInputEl = document.getElementById("filesInput");
-    const addToRagEl = document.getElementById("addToRag");
-    const asyncRagEl = document.getElementById("asyncRag");
     const uploadBtn = document.getElementById("uploadBtn");
     const refreshFilesBtn = document.getElementById("refreshFilesBtn");
     const fileKindFilterEl = document.getElementById("fileKindFilter");
@@ -501,8 +499,8 @@ GUI_HTML = """<!DOCTYPE html>
       }
       const formData = new FormData();
       for (const file of files) formData.append("files", file);
-      formData.append("add_to_rag", addToRagEl.checked ? "true" : "false");
-      formData.append("async_mode", asyncRagEl.checked ? "true" : "false");
+      formData.append("add_to_rag", "true");
+      formData.append("async_mode", "true");
       uploadBtn.disabled = true;
       try {
         const response = await fetch("/files/upload", {
@@ -550,7 +548,7 @@ GUI_HTML = """<!DOCTYPE html>
     });
 
     apiKeyEl.value = getApiKey();
-    addMessage("sys", "Use chat/files no painel. Pesquisa web está ativa automaticamente e auth é detectada ao carregar.");
+    addMessage("sys", "Use chat/files no painel. Pesquisa web e indexação RAG de uploads estão automáticas; auth é detectada ao carregar.");
     autoDetectAuthMode().catch(() => {});
     refreshFiles().catch(() => {});
   </script>
@@ -862,7 +860,7 @@ def rag_search(body: RagSearchRequest) -> dict[str, object]:
 @app.post("/files/upload", dependencies=[Depends(require_api_key)])
 async def upload_files(
     files: list[UploadFile] = File(...),
-    add_to_rag: bool = Form(default=False),
+    add_to_rag: bool = Form(default=True),
     async_mode: bool = Form(default=True),
     background_tasks: BackgroundTasks = None,
 ) -> dict[str, object]:
