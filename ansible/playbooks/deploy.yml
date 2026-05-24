@@ -277,6 +277,30 @@
         enabled: true
         state: started
 
+    - name: Verify local API health on VM
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ leoai_api_port }}/health"
+        method: GET
+        status_code: 200
+      register: local_health_check
+
+    - name: Build access URLs for deployment summary
+      ansible.builtin.set_fact:
+        leoai_access_host: "{{ ansible_host | default(inventory_hostname) }}"
+        leoai_access_scheme: "{{ 'http' if leoai_tls_mode == 'disabled' else 'https' }}"
+
+    - name: Deployment handover summary
+      ansible.builtin.debug:
+        msg:
+          - "LeoAI deployment concluido e servicos ativos."
+          - "Dashboard: {{ leoai_access_scheme }}://{{ leoai_access_host }}/"
+          - "Health: {{ leoai_access_scheme }}://{{ leoai_access_host }}/health"
+          - "Auth verify: {{ leoai_access_scheme }}://{{ leoai_access_host }}/auth/verify"
+          - "TLS mode: {{ leoai_tls_mode }}"
+          - "API auth enabled: {{ leoai_api_auth_enabled }}"
+          - "Local VM health payload: {{ local_health_check.json | default({}) }}"
+          - "Se API auth estiver habilitada, use header X-API-Key com a chave definida no .env da VM."
+
   handlers:
     - name: Restart LeoAI service
       ansible.builtin.systemd:
